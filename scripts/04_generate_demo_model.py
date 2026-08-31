@@ -45,43 +45,54 @@ def _synthetic_features(n: int, rng: np.random.Generator) -> dict[str, np.ndarra
                     pm25_log, blh_norm, cloud_composite, cloud_low_frac
     """
     # Solar geometry: daytime only
-    sza    = rng.uniform(10, 85, n)
-    cos_z  = np.cos(np.radians(sza))
+    sza = rng.uniform(10, 85, n)
+    cos_z = np.cos(np.radians(sza))
     azimuth_sun = rng.uniform(80, 280, n)
     et_rad = 1361 * (1 + 0.033 * np.cos(2 * np.pi * rng.integers(1, 366, n) / 365))
-    hour   = rng.uniform(5, 19, n)
+    hour = rng.uniform(5, 19, n)
 
     # Atmospheric state
-    aod   = rng.gamma(1.5, 0.08, n).clip(0.01, 3.0)
+    aod = rng.gamma(1.5, 0.08, n).clip(0.01, 3.0)
     ozone = rng.normal(310, 30, n).clip(220, 450)
-    pw    = rng.gamma(2.0, 0.8, n).clip(0.1, 6.0)
-    pres  = rng.normal(1013, 15, n).clip(940, 1040)
-    temp  = rng.normal(15, 10, n).clip(-20, 45)
-    rh    = rng.uniform(20, 95, n)
-    wind  = rng.gamma(2.0, 1.5, n).clip(0, 20)
+    pw = rng.gamma(2.0, 0.8, n).clip(0.1, 6.0)
+    pres = rng.normal(1013, 15, n).clip(940, 1040)
+    temp = rng.normal(15, 10, n).clip(-20, 45)
+    rh = rng.uniform(20, 95, n)
+    wind = rng.gamma(2.0, 1.5, n).clip(0, 20)
 
     # Extended physics features
-    ssa   = rng.normal(0.92, 0.05, n).clip(0.6, 1.0)
-    asym  = rng.normal(0.65, 0.07, n).clip(0.3, 0.9)
-    a1    = rng.normal(1.30, 0.30, n).clip(0.1, 2.5)
-    a2    = rng.normal(1.10, 0.25, n).clip(0.1, 2.5)
-    pm25  = np.log1p(rng.gamma(2, 5, n).clip(0.1, 200))
-    blh   = rng.gamma(2, 500, n).clip(100, 3000)
+    ssa = rng.normal(0.92, 0.05, n).clip(0.6, 1.0)
+    asym = rng.normal(0.65, 0.07, n).clip(0.3, 0.9)
+    a1 = rng.normal(1.30, 0.30, n).clip(0.1, 2.5)
+    a2 = rng.normal(1.10, 0.25, n).clip(0.1, 2.5)
+    pm25 = np.log1p(rng.gamma(2, 5, n).clip(0.1, 200))
+    blh = rng.gamma(2, 500, n).clip(100, 3000)
     cloud = rng.beta(0.8, 1.2, n)
-    clow  = rng.beta(0.7, 1.5, n)
+    clow = rng.beta(0.7, 1.5, n)
 
     return {
-        "sza": sza, "cos_sza": cos_z, "azimuth_sun": azimuth_sun,
-        "et_rad": et_rad, "aod_550nm": aod, "ozone_du": ozone,
-        "precip_water": pw, "pressure_hpa": pres, "temp_c": temp,
-        "rh": rh, "wind_ms": wind,
+        "sza": sza,
+        "cos_sza": cos_z,
+        "azimuth_sun": azimuth_sun,
+        "et_rad": et_rad,
+        "aod_550nm": aod,
+        "ozone_du": ozone,
+        "precip_water": pw,
+        "pressure_hpa": pres,
+        "temp_c": temp,
+        "rh": rh,
+        "wind_ms": wind,
         "sin_hour": np.sin(2 * np.pi * hour / 24),
         "cos_hour": np.cos(2 * np.pi * hour / 24),
         # Extended
-        "ssa_norm": ssa, "asym_norm": asym,
-        "alpha1_norm": a1, "alpha2_norm": a2,
-        "pm25_log": pm25, "blh_norm": blh / 2000.0,
-        "cloud_composite": cloud, "cloud_low_frac": clow,
+        "ssa_norm": ssa,
+        "asym_norm": asym,
+        "alpha1_norm": a1,
+        "alpha2_norm": a2,
+        "pm25_log": pm25,
+        "blh_norm": blh / 2000.0,
+        "cloud_composite": cloud,
+        "cloud_low_frac": clow,
     }
 
 
@@ -95,23 +106,23 @@ def _synthetic_kt(feats: dict[str, np.ndarray], rng: np.random.Generator) -> np.
     Then add small calibration noise to simulate real residuals.
     """
     cloud = feats["cloud_composite"]
-    aod   = feats["aod_550nm"]
-    am    = 1.0 / np.maximum(feats["cos_sza"], 0.05)
-    ssa   = feats["ssa_norm"]
-    g     = feats["asym_norm"]
+    aod = feats["aod_550nm"]
+    am = 1.0 / np.maximum(feats["cos_sza"], 0.05)
+    ssa = feats["ssa_norm"]
+    g = feats["asym_norm"]
 
-    ext   = np.clip(aod * am * (1.0 - ssa * g), 0, 5)
+    ext = np.clip(aod * am * (1.0 - ssa * g), 0, 5)
     kt_clear = np.exp(-ext)
     kt_cloud = 0.10 + 0.06 * rng.standard_normal(len(cloud))
     kt = (1 - cloud) * kt_clear + cloud * kt_cloud
-    kt += 0.03 * rng.standard_normal(len(kt))   # sensor / residual noise
+    kt += 0.03 * rng.standard_normal(len(kt))  # sensor / residual noise
     return np.clip(kt, 0.0, 1.05).astype(np.float32)
 
 
 def main():
     try:
-        import xgboost as xgb
         import joblib
+        import xgboost as xgb
     except ImportError:
         logger.error("xgboost and joblib required: pip install xgboost joblib")
         sys.exit(1)
@@ -122,9 +133,10 @@ def main():
     logger.info("Generating %d synthetic training samples …", N_SAMPLES)
 
     feats = _synthetic_features(N_SAMPLES, rng)
-    kt    = _synthetic_kt(feats, rng)
+    kt = _synthetic_kt(feats, rng)
 
     import pandas as pd
+
     X = pd.DataFrame(feats)
     y = kt
 

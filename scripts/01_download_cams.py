@@ -27,9 +27,9 @@ from pathlib import Path
 # Allow running from project root without install
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from solar_forecast.utils import load_config
-from solar_forecast.data_ingestion.db_manager import DBManager
 from solar_forecast.data_ingestion.cams_loader import CamsLoader
+from solar_forecast.data_ingestion.db_manager import DBManager
+from solar_forecast.utils import load_config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,10 +42,16 @@ logger = logging.getLogger("download_cams")
 def parse_args():
     p = argparse.ArgumentParser(description="Download CAMS training data.")
     p.add_argument("--config", default="config.yaml", help="Path to config.yaml")
-    p.add_argument("--start", default=None,
-                   help="Start date YYYY-MM-DD (default: config.cams.training_start)")
-    p.add_argument("--end", default=None,
-                   help="End date YYYY-MM-DD (default: config.cams.training_end)")
+    p.add_argument(
+        "--start",
+        default=None,
+        help="Start date YYYY-MM-DD (default: config.cams.training_start)",
+    )
+    p.add_argument(
+        "--end",
+        default=None,
+        help="End date YYYY-MM-DD (default: config.cams.training_end)",
+    )
     return p.parse_args()
 
 
@@ -54,7 +60,7 @@ def main():
     cfg = load_config(args.config)
 
     start = args.start or cfg["cams"].get("training_start", "2021-01-01")
-    end   = args.end   or cfg["cams"].get("training_end",   "2024-12-31")
+    end = args.end or cfg["cams"].get("training_end", "2024-12-31")
 
     logger.info("═" * 60)
     logger.info("CAMS download: %s → %s", start, end)
@@ -70,7 +76,9 @@ def main():
         counts = loader.run_backfill(start, end)
         logger.info("Download complete.")
         logger.info("  cams_atmo rows inserted   : %d", counts.get("cams_atmo", 0))
-        logger.info("  cams_radiation rows inserted: %d", counts.get("cams_radiation", 0))
+        logger.info(
+            "  cams_radiation rows inserted: %d", counts.get("cams_radiation", 0)
+        )
     except RuntimeError as exc:
         logger.error(str(exc))
         logger.error("Set CAMS_API_KEY in .env and retry.")
