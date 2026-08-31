@@ -69,8 +69,13 @@ def resample_to_1min(df: pd.DataFrame, method: str = "cubic") -> pd.DataFrame:
     idx_1min = pd.date_range(df.index[0], df.index[-1], freq="1min")
 
     # Bounded columns: clamp after interpolation
-    bounded = {"cloud_cover", "aod_550nm", "total_ozone",
-               "precipitable_water", "surface_pressure"}
+    bounded = {
+        "cloud_cover",
+        "aod_550nm",
+        "total_ozone",
+        "precipitable_water",
+        "surface_pressure",
+    }
 
     df_out = df.reindex(df.index.union(idx_1min))
 
@@ -108,8 +113,11 @@ def geocode_city(city: str) -> tuple[float, float, str]:
     Returns None on failure.
     """
     import requests
+
     url = "https://geocoding-api.open-meteo.com/v1/search"
-    resp = requests.get(url, params={"name": city, "count": 1, "language": "en"}, timeout=10)
+    resp = requests.get(
+        url, params={"name": city, "count": 1, "language": "en"}, timeout=10
+    )
     resp.raise_for_status()
     results = resp.json().get("results", [])
     if not results:
@@ -163,6 +171,8 @@ def to_local(df: pd.DataFrame, tz: str) -> pd.DataFrame:
 
 def utc_now() -> pd.Timestamp:
     """Return current time as a tz-aware UTC pandas Timestamp."""
-    return pd.Timestamp.utcnow().tz_localize("UTC") \
-        if pd.Timestamp.utcnow().tz is None \
+    return (
+        pd.Timestamp.utcnow().tz_localize("UTC")
+        if pd.Timestamp.utcnow().tz is None
         else pd.Timestamp.utcnow()
+    )

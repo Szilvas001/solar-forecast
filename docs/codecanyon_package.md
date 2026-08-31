@@ -64,7 +64,7 @@ solar-forecast-pro/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
-├── setup.py
+├── pyproject.toml
 ├── config.yaml
 ├── .env.example
 ├── run.sh                           Convenience launcher script

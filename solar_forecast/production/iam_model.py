@@ -119,7 +119,7 @@ def iam_fresnel(aoi_deg: np.ndarray, n_glass: float = _N_GLASS) -> np.ndarray:
 
     r_s = (cos_i - n_glass * cos_t) / (cos_i + n_glass * cos_t + 1e-9)
     r_p = (n_glass * cos_i - cos_t) / (n_glass * cos_i + cos_t + 1e-9)
-    R = (r_s ** 2 + r_p ** 2) / 2.0
+    R = (r_s**2 + r_p**2) / 2.0
 
     # Normal incidence (reference)
     R0 = ((1.0 - n_glass) / (1.0 + n_glass)) ** 2
@@ -142,7 +142,7 @@ def iam_diffuse(tilt_deg: float, model: str = "ashrae") -> float:
     The result is the scalar IAM evaluated at this equivalent angle.
     """
     tilt = float(tilt_deg)
-    aoi_eq = 59.68 - 0.1388 * tilt + 0.001497 * tilt ** 2
+    aoi_eq = 59.68 - 0.1388 * tilt + 0.001497 * tilt**2
     if model == "martin_ruiz":
         return float(iam_martin_ruiz(np.array([aoi_eq]))[0])
     elif model == "fresnel":

@@ -17,4 +17,4 @@ Public entry points
 
 from __future__ import annotations
 
-__all__ = ["runner", "scheduler", "client", "db", "grib_processor", "backfill"]
+__all__ = ["backfill", "client", "db", "grib_processor", "runner", "scheduler"]

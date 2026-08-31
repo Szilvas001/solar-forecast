@@ -47,13 +47,13 @@ import numpy as np
 import pandas as pd
 import pvlib
 
-from .iam_model import iam_ashrae, iam_martin_ruiz, iam_fresnel, iam_diffuse
-from .spectral_response import SpectralResponse, TECHNOLOGY_LABELS
+from .iam_model import iam_ashrae, iam_diffuse, iam_fresnel, iam_martin_ruiz
+from .spectral_response import TECHNOLOGY_LABELS, SpectralResponse
 
 logger = logging.getLogger(__name__)
 
-_G_STC   = 1000.0   # W/m²  standard test condition irradiance
-_T_STC   = 25.0     # °C
+_G_STC = 1000.0  # W/m²  standard test condition irradiance
+_T_STC = 25.0  # °C
 
 
 class PVOutputModel:
@@ -77,17 +77,18 @@ class PVOutputModel:
         iam_model: str = "ashrae",
     ):
         sys = cfg["system"]
-        self.capacity_kw  = float(sys["capacity_kw"])
-        self.efficiency   = float(sys.get("module_efficiency", 0.205))
-        self.gamma        = float(sys.get("temperature_coefficient", -0.0040))
-        self.noct         = float(sys.get("noct", 44.0))
-        self.albedo       = float(sys.get("ground_albedo", 0.20))
-        self.inv_eff      = float(sys.get("inverter_efficiency", 0.97))
-        self.wiring_loss  = float(sys.get("wiring_loss", 0.02))
+        self.capacity_kw = float(sys["capacity_kw"])
+        self.efficiency = float(sys.get("module_efficiency", 0.205))
+        self.gamma = float(sys.get("temperature_coefficient", -0.0040))
+        self.noct = float(sys.get("noct", 44.0))
+        self.albedo = float(sys.get("ground_albedo", 0.20))
+        self.inv_eff = float(sys.get("inverter_efficiency", 0.97))
+        self.wiring_loss = float(sys.get("wiring_loss", 0.02))
         self.soiling_loss = float(sys.get("soiling_loss", 0.02))
-        self.iam_type     = iam_model
+        self.iam_type = iam_model
 
         from solar_forecast.utils import resolve_tilt_azimuth
+
         self.tilt, self.azimuth = resolve_tilt_azimuth(cfg)
 
         # Spectral response
@@ -106,9 +107,9 @@ class PVOutputModel:
 
     def run(
         self,
-        allsky_df:    pd.DataFrame,
-        temperature:  pd.Series,
-        wind_speed:   pd.Series | None = None,
+        allsky_df: pd.DataFrame,
+        temperature: pd.Series,
+        wind_speed: pd.Series | None = None,
         solar_pos_df: pd.DataFrame | None = None,
         lat: float | None = None,
         lon: float | None = None,
@@ -150,10 +151,10 @@ class PVOutputModel:
         )
 
         poa = pvlib.irradiance.get_total_irradiance(
-            surface_tilt  =self.tilt,
+            surface_tilt=self.tilt,
             surface_azimuth=self.azimuth,
-            solar_zenith  =solar_pos_df["apparent_zenith"],
-            solar_azimuth =solar_pos_df["azimuth"],
+            solar_zenith=solar_pos_df["apparent_zenith"],
+            solar_azimuth=solar_pos_df["azimuth"],
             dni=allsky_df["dni"].fillna(0),
             ghi=allsky_df["ghi"].fillna(0),
             dhi=allsky_df["dhi"].fillna(0),
@@ -163,13 +164,14 @@ class PVOutputModel:
             albedo=self.albedo,
         )
 
-        poa_beam  = poa["poa_direct"].fillna(0).clip(lower=0)
-        poa_diff  = poa["poa_diffuse"].fillna(0).clip(lower=0)
+        poa_beam = poa["poa_direct"].fillna(0).clip(lower=0)
+        poa_diff = poa["poa_diffuse"].fillna(0).clip(lower=0)
         poa_total = poa["poa_global"].fillna(0).clip(lower=0)
 
         # ── Incidence Angle Modifier ──────────────────────────────────────
         aoi = pvlib.irradiance.aoi(
-            self.tilt, self.azimuth,
+            self.tilt,
+            self.azimuth,
             solar_pos_df["apparent_zenith"],
             solar_pos_df["azimuth"],
         ).fillna(90.0)
@@ -212,17 +214,20 @@ class PVOutputModel:
         p_ac = p_dc * loss_factor * self.inv_eff
         p_ac = np.clip(p_ac, 0.0, self.capacity_kw * 1.1)
 
-        return pd.DataFrame({
-            "power_kw": p_ac,
-            "power_dc_kw": p_dc,
-            "g_eff": g_eff,
-            "t_cell": t_cell,
-            "poa": poa_total.values,
-            "mm": mm_arr,
-            "iam_beam": iam_b,
-            "kt": allsky_df.get("kt", pd.Series(np.nan, index=times)).values,
-            "ghi": allsky_df["ghi"].values,
-        }, index=times)
+        return pd.DataFrame(
+            {
+                "power_kw": p_ac,
+                "power_dc_kw": p_dc,
+                "g_eff": g_eff,
+                "t_cell": t_cell,
+                "poa": poa_total.values,
+                "mm": mm_arr,
+                "iam_beam": iam_b,
+                "kt": allsky_df.get("kt", pd.Series(np.nan, index=times)).values,
+                "ghi": allsky_df["ghi"].values,
+            },
+            index=times,
+        )
 
     def run_from_live(
         self,
@@ -251,6 +256,8 @@ class PVOutputModel:
             allsky_df=allsky_df,
             temperature=T,
             wind_speed=ws,
-            lat=lat, lon=lon, altitude=altitude,
+            lat=lat,
+            lon=lon,
+            altitude=altitude,
             spectra_list=spectra_list,
         )

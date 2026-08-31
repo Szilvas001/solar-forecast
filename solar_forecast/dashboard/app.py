@@ -10,11 +10,9 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -36,7 +34,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown("""
+st.markdown(
+    """
 <style>
   body, [data-testid="stAppViewContainer"] { background:#0E1117; }
   .block-container { padding-top:1.5rem; max-width:1400px; }
@@ -79,7 +78,9 @@ st.markdown("""
 
   footer { visibility:hidden; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ═══════════════════════════════════════════════════════════════════
 # Constants
@@ -87,17 +88,31 @@ st.markdown("""
 _TECH = {
     "mono_si": "Mono-Si (standard)",
     "poly_si": "Poly-Si",
-    "cdte":    "CdTe (thin-film)",
-    "cigs":    "CIGS (thin-film)",
-    "hit":     "HIT / Heterojunction",
+    "cdte": "CdTe (thin-film)",
+    "cigs": "CIGS (thin-film)",
+    "hit": "HIT / Heterojunction",
 }
 _IAM_MODELS = ["ashrae", "martin_ruiz", "fresnel"]
-_TIMEZONES  = [
-    "UTC","Europe/Budapest","Europe/Vienna","Europe/Berlin","Europe/London",
-    "Europe/Paris","Europe/Warsaw","Europe/Rome","Europe/Madrid",
-    "Europe/Bucharest","Europe/Athens",
-    "US/Eastern","US/Central","US/Mountain","US/Pacific",
-    "Asia/Tokyo","Asia/Shanghai","Asia/Kolkata","Australia/Sydney",
+_TIMEZONES = [
+    "UTC",
+    "Europe/Budapest",
+    "Europe/Vienna",
+    "Europe/Berlin",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Warsaw",
+    "Europe/Rome",
+    "Europe/Madrid",
+    "Europe/Bucharest",
+    "Europe/Athens",
+    "US/Eastern",
+    "US/Central",
+    "US/Mountain",
+    "US/Pacific",
+    "Asia/Tokyo",
+    "Asia/Shanghai",
+    "Asia/Kolkata",
+    "Australia/Sydney",
 ]
 _LEVELS = {"Basic": 1, "Pro": 2, "Expert": 3}
 
@@ -111,6 +126,7 @@ def _init_db():
     db.create_tables()
     db.seed_demo_location()
 
+
 _init_db()
 
 
@@ -118,11 +134,21 @@ _init_db()
 # Forecast cache (30 min TTL — no live API calls during tests)
 # ═══════════════════════════════════════════════════════════════════
 @st.cache_data(ttl=1800, show_spinner=False)
-def _forecast(lat, lon, alt, cap, tilt, az, tech, iam, horizon, use_ai, sr_csv, denorm, _key):
+def _forecast(
+    lat, lon, alt, cap, tilt, az, tech, iam, horizon, use_ai, sr_csv, denorm, _key
+):
     return run_demo_forecast(
-        lat=lat, lon=lon, altitude=alt, capacity_kw=cap,
-        tilt=tilt, azimuth=az, technology=tech, iam_model=iam,
-        horizon_days=horizon, sr_csv=sr_csv, use_ai=use_ai,
+        lat=lat,
+        lon=lon,
+        altitude=alt,
+        capacity_kw=cap,
+        tilt=tilt,
+        azimuth=az,
+        technology=tech,
+        iam_model=iam,
+        horizon_days=horizon,
+        sr_csv=sr_csv,
+        use_ai=use_ai,
         denorm_factor=denorm,
     )
 
@@ -137,15 +163,22 @@ def _tz_convert(df: pd.DataFrame, tz: str) -> pd.DataFrame:
 
 def _geocode(city: str):
     import requests
+
     r = requests.get(
         "https://geocoding-api.open-meteo.com/v1/search",
-        params={"name": city, "count": 1, "language": "en"}, timeout=8,
+        params={"name": city, "count": 1, "language": "en"},
+        timeout=8,
     )
     results = r.json().get("results", [])
     if not results:
         raise ValueError(f"City not found: {city!r}")
     res = results[0]
-    return float(res["latitude"]), float(res["longitude"]), res.get("name", city), float(res.get("elevation", 0))
+    return (
+        float(res["latitude"]),
+        float(res["longitude"]),
+        res.get("name", city),
+        float(res.get("elevation", 0)),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -164,12 +197,14 @@ def _get_data_status():
     }
     try:
         from solar_forecast.ingestion.cams.client import is_cams_configured
+
         status["cams_configured"] = is_cams_configured()
     except Exception:
         pass
 
     try:
-        from solar_forecast.db.manager import get_connection, create_tables
+        from solar_forecast.db.manager import create_tables, get_connection
+
         create_tables()
         with get_connection() as conn:
             r1 = conn.execute(
@@ -203,6 +238,7 @@ def _get_data_status():
 def _get_confidence(cfg: dict, result: dict) -> dict:
     try:
         from solar_forecast.engine.confidence import compute_confidence
+
         atm_src = result.get("atmosphere", {}).get("source", "climatology")
         return compute_confidence(
             atmosphere_source=atm_src,
@@ -214,7 +250,11 @@ def _get_confidence(cfg: dict, result: dict) -> dict:
             sr_csv=cfg.get("sr_csv"),
         )
     except Exception:
-        return {"confidence_pct": 65, "confidence_label": "Medium", "confidence_reasons": []}
+        return {
+            "confidence_pct": 65,
+            "confidence_label": "Medium",
+            "confidence_reasons": [],
+        }
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -226,18 +266,26 @@ def _kpi(col, label: str, value: str, sub: str = ""):
         f'<div class="kpi-val">{value}</div>'
         f'<div class="kpi-label">{label}</div>'
         f'<div class="kpi-sub">{sub}</div>'
-        f'</div>',
+        f"</div>",
         unsafe_allow_html=True,
     )
 
 
 def _confidence_widget(conf: dict):
-    pct   = conf["confidence_pct"]
+    pct = conf["confidence_pct"]
     label = conf["confidence_label"]
-    color = "conf-high" if label in ("High", "Very High") else ("conf-med" if label == "Medium" else "conf-low")
-    icon  = "🟢" if label in ("High", "Very High") else ("🟡" if label == "Medium" else "🔴")
+    color = (
+        "conf-high"
+        if label in ("High", "Very High")
+        else ("conf-med" if label == "Medium" else "conf-low")
+    )
+    icon = (
+        "🟢"
+        if label in ("High", "Very High")
+        else ("🟡" if label == "Medium" else "🔴")
+    )
     st.markdown(
-        f'**{icon} Forecast confidence: {label}** ({pct}%)<br>'
+        f"**{icon} Forecast confidence: {label}** ({pct}%)<br>"
         f'<div class="conf-bar"><div class="conf-fill {color}" style="width:{pct}%"></div></div>',
         unsafe_allow_html=True,
     )
@@ -256,7 +304,9 @@ def _sidebar():
         st.caption("Physics-accurate · AI-enhanced · SaaS")
         st.divider()
 
-        level_name = st.radio("User level", list(_LEVELS.keys()), horizontal=True, index=0)
+        level_name = st.radio(
+            "User level", list(_LEVELS.keys()), horizontal=True, index=0
+        )
         level = _LEVELS[level_name]
         st.divider()
 
@@ -266,51 +316,70 @@ def _sidebar():
         loc_name = _DEMO_NAME
 
         if mode == "City":
-            city = st.text_input("City name", value="Budapest", placeholder="e.g. London")
+            city = st.text_input(
+                "City name", value="Budapest", placeholder="e.g. London"
+            )
             if st.button("🔍 Find", use_container_width=True):
                 try:
                     lat, lon, loc_name, alt = _geocode(city)
                     st.session_state["geo"] = (lat, lon, loc_name, alt)
                 except Exception as e:
                     st.error(str(e))
-            geo = st.session_state.get("geo", (_DEMO_LAT, _DEMO_LON, _DEMO_NAME, _DEMO_ALT))
+            geo = st.session_state.get(
+                "geo", (_DEMO_LAT, _DEMO_LON, _DEMO_NAME, _DEMO_ALT)
+            )
             lat, lon, loc_name, alt = geo
         else:
             c1, c2 = st.columns(2)
-            lat = c1.number_input("Lat", -90.0,  90.0,  _DEMO_LAT, 0.001, format="%.4f")
+            lat = c1.number_input("Lat", -90.0, 90.0, _DEMO_LAT, 0.001, format="%.4f")
             lon = c2.number_input("Lon", -180.0, 180.0, _DEMO_LON, 0.001, format="%.4f")
             alt = st.number_input("Altitude (m)", 0, 5000, int(_DEMO_ALT))
             loc_name = f"{lat:.3f}°N {lon:.3f}°E"
 
-        cap = st.number_input("System size (kW)", 0.1, 100000.0, 5.0, 0.5,
-                              help="Total installed DC capacity of your solar panels")
+        cap = st.number_input(
+            "System size (kW)",
+            0.1,
+            100000.0,
+            5.0,
+            0.5,
+            help="Total installed DC capacity of your solar panels",
+        )
 
         # ── PRO options ───────────────────────────────────────────
         tilt = az = None
-        tech    = "mono_si"
+        tech = "mono_si"
         horizon = 7
-        tz      = "Europe/Budapest"
+        tz = "Europe/Budapest"
 
         if level >= 2:
             st.divider()
             st.markdown('<span class="badge-pro">PRO</span>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             tilt = c1.slider("Tilt (°)", 0, 90, 35)
-            az   = c2.slider("Azimuth (°)", 0, 360, 180,
-                             help="180 = South  ·  90 = East  ·  270 = West")
-            tech    = st.selectbox("Panel type", list(_TECH), format_func=lambda k: _TECH[k])
+            az = c2.slider(
+                "Azimuth (°)",
+                0,
+                360,
+                180,
+                help="180 = South  ·  90 = East  ·  270 = West",
+            )
+            tech = st.selectbox(
+                "Panel type", list(_TECH), format_func=lambda k: _TECH[k]
+            )
             horizon = st.slider("Forecast days", 1, 14, 7)
-            tz      = st.selectbox("Timezone", _TIMEZONES, index=1)
+            tz = st.selectbox("Timezone", _TIMEZONES, index=1)
 
         # ── EXPERT options ────────────────────────────────────────
-        iam_model  = "ashrae"
-        use_ai     = False
-        sr_csv     = None
-        denorm     = 1.0
+        iam_model = "ashrae"
+        use_ai = False
+        sr_csv = None
+        denorm = 1.0
 
         if level >= 3:
             st.divider()
-            st.markdown('<span class="badge-expert">EXPERT</span>', unsafe_allow_html=True)
+            st.markdown(
+                '<span class="badge-expert">EXPERT</span>', unsafe_allow_html=True
+            )
             with st.expander("Advanced physics settings"):
                 iam_model = st.selectbox(
                     "Incidence angle model",
@@ -319,9 +388,12 @@ def _sidebar():
                 )
                 denorm = st.slider(
                     "Effective irradiance scale",
-                    0.70, 1.30, 1.00, 0.01,
+                    0.70,
+                    1.30,
+                    1.00,
+                    0.01,
                     help="Scales effective irradiance (spectral denormalization factor). "
-                         "Values < 1.0 reduce output; > 1.0 increase. Default 1.0.",
+                    "Values < 1.0 reduce output; > 1.0 increase. Default 1.0.",
                 )
                 use_ai = st.toggle(
                     "AI Kt correction (XGBoost)",
@@ -344,13 +416,23 @@ def _sidebar():
             st.cache_data.clear()
             st.rerun()
 
-    return dict(
-        lat=lat, lon=lon, alt=float(alt or 0), cap=float(cap),
-        tilt=tilt, az=az, tech=tech, iam=iam_model,
-        horizon=horizon, tz=tz if level >= 2 else "UTC",
-        use_ai=use_ai, sr_csv=sr_csv, denorm=denorm,
-        loc_name=loc_name, level=level,
-    )
+    return {
+        "lat": lat,
+        "lon": lon,
+        "alt": float(alt or 0),
+        "cap": float(cap),
+        "tilt": tilt,
+        "az": az,
+        "tech": tech,
+        "iam": iam_model,
+        "horizon": horizon,
+        "tz": tz if level >= 2 else "UTC",
+        "use_ai": use_ai,
+        "sr_csv": sr_csv,
+        "denorm": denorm,
+        "loc_name": loc_name,
+        "level": level,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -360,24 +442,34 @@ def _chart_production(hourly: pd.DataFrame, tz: str, show_clearsky: bool = True)
     df = _tz_convert(hourly, tz)
     fig = go.Figure()
     if show_clearsky and "power_clear_kw" in df.columns:
-        fig.add_trace(go.Scatter(
-            x=df.index, y=df["power_clear_kw"],
-            name="Clear-sky", line=dict(color="#74c0fc", width=1.5, dash="dot"),
-        ))
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df["power_kw"],
-        name="Forecast", fill="tozeroy",
-        line=dict(color="#F4A503", width=2.5),
-        fillcolor="rgba(244,165,3,0.12)",
-    ))
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["power_clear_kw"],
+                name="Clear-sky",
+                line={"color": "#74c0fc", "width": 1.5, "dash": "dot"},
+            )
+        )
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["power_kw"],
+            name="Forecast",
+            fill="tozeroy",
+            line={"color": "#F4A503", "width": 2.5},
+            fillcolor="rgba(244,165,3,0.12)",
+        )
+    )
     fig.update_layout(
-        template="plotly_dark", height=340,
-        margin=dict(t=10, b=10, l=0, r=0),
+        template="plotly_dark",
+        height=340,
+        margin={"t": 10, "b": 10, "l": 0, "r": 0},
         yaxis_title="Power (kW)",
-        legend=dict(orientation="h", y=1.05),
-        xaxis=dict(showgrid=False),
-        yaxis=dict(gridcolor="#2a2a3e"),
-        plot_bgcolor="#0E1117", paper_bgcolor="#0E1117",
+        legend={"orientation": "h", "y": 1.05},
+        xaxis={"showgrid": False},
+        yaxis={"gridcolor": "#2a2a3e"},
+        plot_bgcolor="#0E1117",
+        paper_bgcolor="#0E1117",
     )
     return fig
 
@@ -385,20 +477,25 @@ def _chart_production(hourly: pd.DataFrame, tz: str, show_clearsky: bool = True)
 def _chart_daily(hourly: pd.DataFrame, tz: str):
     df = _tz_convert(hourly, tz)
     daily = df.groupby(df.index.normalize())["energy_kwh"].sum().head(14)
-    fig = go.Figure(go.Bar(
-        x=[d.strftime("%a %d %b") for d in daily.index],
-        y=daily.values.round(1),
-        marker_color="#F4A503", marker_line_width=0,
-        text=[f"{v:.1f}" for v in daily.values],
-        textposition="outside",
-        textfont=dict(color="#aaa", size=11),
-    ))
+    fig = go.Figure(
+        go.Bar(
+            x=[d.strftime("%a %d %b") for d in daily.index],
+            y=daily.values.round(1),
+            marker_color="#F4A503",
+            marker_line_width=0,
+            text=[f"{v:.1f}" for v in daily.values],
+            textposition="outside",
+            textfont={"color": "#aaa", "size": 11},
+        )
+    )
     fig.update_layout(
-        template="plotly_dark", height=260,
-        margin=dict(t=10, b=10, l=0, r=0),
+        template="plotly_dark",
+        height=260,
+        margin={"t": 10, "b": 10, "l": 0, "r": 0},
         yaxis_title="kWh",
-        plot_bgcolor="#0E1117", paper_bgcolor="#0E1117",
-        yaxis=dict(gridcolor="#2a2a3e"),
+        plot_bgcolor="#0E1117",
+        paper_bgcolor="#0E1117",
+        yaxis={"gridcolor": "#2a2a3e"},
     )
     return fig
 
@@ -410,10 +507,14 @@ def _data_status_section(expanded: bool = False):
     ds = _get_data_status()
 
     tier_labels = {
-        "cams_om":        ("🟢", "CAMS + Weather",     "Full physics accuracy"),
-        "om_climatology": ("🟡", "Weather + defaults", "Good accuracy, no live aerosol data"),
-        "cams_only":      ("🟡", "CAMS only",          "Atmospheric data, no weather"),
-        "demo":           ("🔵", "Demo mode",           "Works offline, no data sources needed"),
+        "cams_om": ("🟢", "CAMS + Weather", "Full physics accuracy"),
+        "om_climatology": (
+            "🟡",
+            "Weather + defaults",
+            "Good accuracy, no live aerosol data",
+        ),
+        "cams_only": ("🟡", "CAMS only", "Atmospheric data, no weather"),
+        "demo": ("🔵", "Demo mode", "Works offline, no data sources needed"),
     }
     icon, tier_name, tier_desc = tier_labels.get(ds["data_tier"], ("🔵", "Demo", ""))
 
@@ -424,32 +525,49 @@ def _data_status_section(expanded: bool = False):
         with c1:
             st.markdown("**🛰 CAMS Atmospheric Data**")
             if ds["cams_configured"]:
-                st.markdown('<span class="status-ok">✓ API key configured</span>', unsafe_allow_html=True)
+                st.markdown(
+                    '<span class="status-ok">✓ API key configured</span>',
+                    unsafe_allow_html=True,
+                )
             else:
-                st.markdown('<span class="status-warn">⚠ No API key — using defaults</span>',
-                            unsafe_allow_html=True)
+                st.markdown(
+                    '<span class="status-warn">⚠ No API key — using defaults</span>',
+                    unsafe_allow_html=True,
+                )
             if ds["cams_rows"] > 0:
-                st.markdown(f'<span class="status-ok">✓ {ds["cams_rows"]:,} rows stored</span>',
-                            unsafe_allow_html=True)
+                st.markdown(
+                    f'<span class="status-ok">✓ {ds["cams_rows"]:,} rows stored</span>',
+                    unsafe_allow_html=True,
+                )
                 if ds["cams_last_update"]:
                     st.caption(f"Last update: {ds['cams_last_update'][:16]}")
             else:
-                st.markdown('<span class="status-warn">No CAMS data in database — falling back to climatology</span>',
-                            unsafe_allow_html=True)
-                st.caption("Run: python -m solar_forecast.ingestion.cams.backfill --location-id 1 --days 30")
+                st.markdown(
+                    '<span class="status-warn">No CAMS data in database — falling back to climatology</span>',
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    "Run: python -m solar_forecast.ingestion.cams.backfill --location-id 1 --days 30"
+                )
 
         # Open-Meteo status
         with c2:
             st.markdown("**🌤 Open-Meteo Weather**")
             if ds["om_rows"] > 0:
-                st.markdown(f'<span class="status-ok">✓ {ds["om_rows"]:,} rows stored</span>',
-                            unsafe_allow_html=True)
+                st.markdown(
+                    f'<span class="status-ok">✓ {ds["om_rows"]:,} rows stored</span>',
+                    unsafe_allow_html=True,
+                )
                 if ds["om_last_update"]:
                     st.caption(f"Last update: {ds['om_last_update'][:16]}")
             else:
-                st.markdown('<span class="status-ok">✓ Live fetch on demand (free, no key needed)</span>',
-                            unsafe_allow_html=True)
-                st.caption("Weather is fetched live from Open-Meteo for each forecast request")
+                st.markdown(
+                    '<span class="status-ok">✓ Live fetch on demand (free, no key needed)</span>',
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    "Weather is fetched live from Open-Meteo for each forecast request"
+                )
 
         st.caption(f"Forecast tier: **{tier_name}** — {tier_desc}")
 
@@ -471,9 +589,9 @@ def tab_dashboard(cfg: dict):
         f'<div class="hero-card">'
         f'<div class="hero-title">☀️ Solar Forecast</div>'
         f'<div class="hero-sub">📍 {cfg["loc_name"]} &nbsp;·&nbsp; '
-        f'⚡ {cfg["cap"]:.1f} kW &nbsp;·&nbsp; '
-        f'{"🤖 AI-enhanced" if cfg["use_ai"] else "⚙️ Physics model"}</div>'
-        f'</div>',
+        f"⚡ {cfg['cap']:.1f} kW &nbsp;·&nbsp; "
+        f"{'🤖 AI-enhanced' if cfg['use_ai'] else '⚙️ Physics model'}</div>"
+        f"</div>",
         unsafe_allow_html=True,
     )
 
@@ -481,21 +599,31 @@ def tab_dashboard(cfg: dict):
     with st.spinner("Computing forecast…"):
         try:
             result = _forecast(
-                cfg["lat"], cfg["lon"], cfg["alt"], cfg["cap"],
-                cfg["tilt"], cfg["az"], cfg["tech"], cfg["iam"],
-                cfg["horizon"], cfg["use_ai"], cfg["sr_csv"], cfg.get("denorm", 1.0), key,
+                cfg["lat"],
+                cfg["lon"],
+                cfg["alt"],
+                cfg["cap"],
+                cfg["tilt"],
+                cfg["az"],
+                cfg["tech"],
+                cfg["iam"],
+                cfg["horizon"],
+                cfg["use_ai"],
+                cfg["sr_csv"],
+                cfg.get("denorm", 1.0),
+                key,
             )
         except Exception as exc:
             st.error(f"Forecast error: {exc}")
             return
 
-    s      = result["summary"]
+    s = result["summary"]
     hourly = result["hourly"]
-    tz     = cfg["tz"]
+    tz = cfg["tz"]
 
     # KPIs — plain language for Basic
     cols = st.columns(5)
-    _kpi(cols[0], "Today",    f"{s['today_kwh']:.1f} kWh", "estimated production")
+    _kpi(cols[0], "Today", f"{s['today_kwh']:.1f} kWh", "estimated production")
     _kpi(cols[1], "Tomorrow", f"{s['tomorrow_kwh']:.1f} kWh")
     _kpi(cols[2], f"{cfg['horizon']}-Day Total", f"{s['total_7d_kwh']:.0f} kWh")
     _kpi(cols[3], "Peak power", f"{s['peak_power_kw']:.2f} kW")
@@ -504,27 +632,32 @@ def tab_dashboard(cfg: dict):
     st.markdown("")
 
     try:
-        ph     = pd.Timestamp(s["peak_hour_utc"]).tz_convert(tz).strftime("%H:%M")
+        ph = pd.Timestamp(s["peak_hour_utc"]).tz_convert(tz).strftime("%H:%M")
         phdate = pd.Timestamp(s["peak_hour_utc"]).tz_convert(tz).strftime("%d %b")
     except Exception:
         ph, phdate = "—", ""
 
     c1, c2 = st.columns([3, 1])
     with c1:
-        st.markdown('<div class="section-title">Production vs clear-sky</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">Production vs clear-sky</div>',
+            unsafe_allow_html=True,
+        )
         st.plotly_chart(_chart_production(hourly, tz), use_container_width=True)
     with c2:
         st.markdown('<div class="section-title">Details</div>', unsafe_allow_html=True)
         st.metric("Peak time", ph, phdate)
         if cfg["level"] >= 2:
-            st.metric("Panel type",  _TECH.get(cfg["tech"], cfg["tech"]))
-            st.metric("IAM model",   cfg["iam"].replace("_", "-").title())
+            st.metric("Panel type", _TECH.get(cfg["tech"], cfg["tech"]))
+            st.metric("IAM model", cfg["iam"].replace("_", "-").title())
         conf = _get_confidence(cfg, result)
         st.markdown("")
         _confidence_widget(conf)
 
-    st.markdown(f'<div class="section-title">Daily output ({cfg["horizon"]}-day)</div>',
-                unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="section-title">Daily output ({cfg["horizon"]}-day)</div>',
+        unsafe_allow_html=True,
+    )
     st.plotly_chart(_chart_daily(hourly, tz), use_container_width=True)
 
     # Data status (always visible — collapsed by default in Basic)
@@ -538,81 +671,155 @@ def tab_forecast(cfg: dict):
     key = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H")
     try:
         result = _forecast(
-            cfg["lat"], cfg["lon"], cfg["alt"], cfg["cap"],
-            cfg["tilt"], cfg["az"], cfg["tech"], cfg["iam"],
-            cfg["horizon"], cfg["use_ai"], cfg["sr_csv"], cfg.get("denorm", 1.0), key,
+            cfg["lat"],
+            cfg["lon"],
+            cfg["alt"],
+            cfg["cap"],
+            cfg["tilt"],
+            cfg["az"],
+            cfg["tech"],
+            cfg["iam"],
+            cfg["horizon"],
+            cfg["use_ai"],
+            cfg["sr_csv"],
+            cfg.get("denorm", 1.0),
+            key,
         )
     except Exception as exc:
-        st.error(str(exc)); return
+        st.error(str(exc))
+        return
 
     hourly = _tz_convert(result["hourly"], cfg["tz"])
 
-    st.markdown('<div class="section-title">Hourly production forecast</div>', unsafe_allow_html=True)
-    st.plotly_chart(_chart_production(result["hourly"], cfg["tz"]), use_container_width=True)
+    st.markdown(
+        '<div class="section-title">Hourly production forecast</div>',
+        unsafe_allow_html=True,
+    )
+    st.plotly_chart(
+        _chart_production(result["hourly"], cfg["tz"]), use_container_width=True
+    )
 
     # GHI comparison
     fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(x=hourly.index, y=hourly.get("ghi_clear_wm2", []),
-                              name="Clear-sky GHI", line=dict(color="#74c0fc", dash="dot")))
-    fig2.add_trace(go.Scatter(x=hourly.index, y=hourly.get("ghi_wm2", []),
-                              name="All-sky GHI", fill="tozeroy",
-                              line=dict(color="#F4A503")))
-    fig2.update_layout(template="plotly_dark", height=260,
-                       margin=dict(t=10, b=0, l=0, r=0),
-                       yaxis_title="W/m²",
-                       plot_bgcolor="#0E1117", paper_bgcolor="#0E1117",
-                       legend=dict(orientation="h", y=1.1))
-    st.markdown('<div class="section-title">Solar irradiance: actual vs clear-sky (W/m²)</div>',
-                unsafe_allow_html=True)
+    fig2.add_trace(
+        go.Scatter(
+            x=hourly.index,
+            y=hourly.get("ghi_clear_wm2", []),
+            name="Clear-sky GHI",
+            line={"color": "#74c0fc", "dash": "dot"},
+        )
+    )
+    fig2.add_trace(
+        go.Scatter(
+            x=hourly.index,
+            y=hourly.get("ghi_wm2", []),
+            name="All-sky GHI",
+            fill="tozeroy",
+            line={"color": "#F4A503"},
+        )
+    )
+    fig2.update_layout(
+        template="plotly_dark",
+        height=260,
+        margin={"t": 10, "b": 0, "l": 0, "r": 0},
+        yaxis_title="W/m²",
+        plot_bgcolor="#0E1117",
+        paper_bgcolor="#0E1117",
+        legend={"orientation": "h", "y": 1.1},
+    )
+    st.markdown(
+        '<div class="section-title">Solar irradiance: actual vs clear-sky (W/m²)</div>',
+        unsafe_allow_html=True,
+    )
     st.plotly_chart(fig2, use_container_width=True)
 
     # SR/IAM/denorm comparison (Expert only)
     if cfg["level"] >= 3 and "spectral_mm" in hourly.columns:
         with st.expander("Spectral mismatch & IAM details", expanded=False):
-            mm_mean  = float(hourly["spectral_mm"].replace(0, np.nan).mean() or 1.0)
+            mm_mean = float(hourly["spectral_mm"].replace(0, np.nan).mean() or 1.0)
             iam_mean = float(hourly["iam"].replace(0, np.nan).mean() or 0.96)
-            denorm   = cfg.get("denorm", 1.0)
+            denorm = cfg.get("denorm", 1.0)
             col1, col2, col3 = st.columns(3)
-            col1.metric("Spectral MM (mean)", f"{mm_mean:.4f}",
-                        help="How well panel spectral response matches actual sky spectrum. 1.0 = perfect match")
-            col2.metric("IAM factor (mean)", f"{iam_mean:.4f}",
-                        help="Incidence angle modifier — reduces output at oblique sun angles")
-            col3.metric("Denorm scale", f"{denorm:.2f}",
-                        help="Effective irradiance scaling factor (1.0 = no change)")
+            col1.metric(
+                "Spectral MM (mean)",
+                f"{mm_mean:.4f}",
+                help="How well panel spectral response matches actual sky spectrum. 1.0 = perfect match",
+            )
+            col2.metric(
+                "IAM factor (mean)",
+                f"{iam_mean:.4f}",
+                help="Incidence angle modifier — reduces output at oblique sun angles",
+            )
+            col3.metric(
+                "Denorm scale",
+                f"{denorm:.2f}",
+                help="Effective irradiance scaling factor (1.0 = no change)",
+            )
             st.caption(
                 f"Combined modifier applied to POA irradiance: "
                 f"MM ({mm_mean:.3f}) × IAM ({iam_mean:.3f}) × scale ({denorm:.2f}) "
                 f"= **{mm_mean * iam_mean * denorm:.3f}**"
             )
 
-    show_cols = ["power_kw", "energy_kwh", "ghi_wm2", "kt", "t_cell_c", "iam", "cloud_cover_frac"]
+    show_cols = [
+        "power_kw",
+        "energy_kwh",
+        "ghi_wm2",
+        "kt",
+        "t_cell_c",
+        "iam",
+        "cloud_cover_frac",
+    ]
     show_cols = [c for c in show_cols if c in hourly.columns]
     rename = {
-        "power_kw": "Power (kW)", "energy_kwh": "Energy (kWh)", "ghi_wm2": "GHI (W/m²)",
-        "kt": "Kt", "t_cell_c": "Cell °C", "iam": "IAM factor", "cloud_cover_frac": "Cloud cover",
+        "power_kw": "Power (kW)",
+        "energy_kwh": "Energy (kWh)",
+        "ghi_wm2": "GHI (W/m²)",
+        "kt": "Kt",
+        "t_cell_c": "Cell °C",
+        "iam": "IAM factor",
+        "cloud_cover_frac": "Cloud cover",
     }
-    st.markdown('<div class="section-title">Hourly data table</div>', unsafe_allow_html=True)
-    st.dataframe(hourly[show_cols].rename(columns=rename).round(3),
-                 use_container_width=True, height=380)
+    st.markdown(
+        '<div class="section-title">Hourly data table</div>', unsafe_allow_html=True
+    )
+    st.dataframe(
+        hourly[show_cols].rename(columns=rename).round(3),
+        use_container_width=True,
+        height=380,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
 # Tab: Locations
 # ═══════════════════════════════════════════════════════════════════
 def tab_locations(cfg: dict):
-    st.markdown('<div class="section-title">📍 Saved Locations</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">📍 Saved Locations</div>', unsafe_allow_html=True
+    )
     locations = db.list_locations()
 
     if locations:
         df = pd.DataFrame(locations)[
-            ["id","name","lat","lon","capacity_kw","tilt","azimuth","technology","timezone"]
+            [
+                "id",
+                "name",
+                "lat",
+                "lon",
+                "capacity_kw",
+                "tilt",
+                "azimuth",
+                "technology",
+                "timezone",
+            ]
         ]
         st.dataframe(df, use_container_width=True, hide_index=True)
         c1, c2 = st.columns([3, 1])
         del_id = c1.number_input("Delete location ID", 0, step=1, value=0)
         if c2.button("🗑️ Delete"):
             if del_id and db.delete_location(int(del_id)):
-                st.success(f"Deleted #{del_id}"); st.rerun()
+                st.success(f"Deleted #{del_id}")
+                st.rerun()
     else:
         st.info("No locations saved yet. Add one below.")
 
@@ -622,28 +829,36 @@ def tab_locations(cfg: dict):
     with st.form("add_loc"):
         c1, c2 = st.columns(2)
         name = c1.text_input("Name")
-        cap  = c2.number_input("System size (kW)", 0.1, 100000.0, 5.0, 0.5)
+        cap = c2.number_input("System size (kW)", 0.1, 100000.0, 5.0, 0.5)
         c1, c2, c3 = st.columns(3)
-        lat  = c1.number_input("Latitude",  -90.0,  90.0,  _DEMO_LAT, 0.001)
-        lon  = c2.number_input("Longitude", -180.0, 180.0, _DEMO_LON, 0.001)
-        alt  = c3.number_input("Altitude (m)", 0.0, 5000.0, _DEMO_ALT, 10.0)
+        lat = c1.number_input("Latitude", -90.0, 90.0, _DEMO_LAT, 0.001)
+        lon = c2.number_input("Longitude", -180.0, 180.0, _DEMO_LON, 0.001)
+        alt = c3.number_input("Altitude (m)", 0.0, 5000.0, _DEMO_ALT, 10.0)
         c1, c2 = st.columns(2)
         tilt = c1.number_input("Tilt (°)", 0.0, 90.0, 35.0)
-        az   = c2.number_input("Azimuth (°)", 0.0, 360.0, 180.0)
+        az = c2.number_input("Azimuth (°)", 0.0, 360.0, 180.0)
         c1, c2 = st.columns(2)
         tech = c1.selectbox("Panel type", list(_TECH), format_func=lambda k: _TECH[k])
-        tz   = c2.selectbox("Timezone", _TIMEZONES, index=1)
+        tz = c2.selectbox("Timezone", _TIMEZONES, index=1)
         if st.form_submit_button("✓ Save", type="primary"):
             if not name.strip():
                 st.error("Name is required.")
             else:
-                new = db.create_location({
-                    "name": name.strip(), "lat": lat, "lon": lon,
-                    "altitude": alt, "capacity_kw": cap,
-                    "tilt": tilt, "azimuth": az,
-                    "technology": tech, "timezone": tz,
-                })
-                st.success(f"Saved #{new['id']}: {new['name']}"); st.rerun()
+                new = db.create_location(
+                    {
+                        "name": name.strip(),
+                        "lat": lat,
+                        "lon": lon,
+                        "altitude": alt,
+                        "capacity_kw": cap,
+                        "tilt": tilt,
+                        "azimuth": az,
+                        "technology": tech,
+                        "timezone": tz,
+                    }
+                )
+                st.success(f"Saved #{new['id']}: {new['name']}")
+                st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -653,36 +868,59 @@ def tab_reports(cfg: dict):
     key = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H")
     try:
         result = _forecast(
-            cfg["lat"], cfg["lon"], cfg["alt"], cfg["cap"],
-            cfg["tilt"], cfg["az"], cfg["tech"], cfg["iam"],
-            cfg["horizon"], cfg["use_ai"], cfg["sr_csv"], cfg.get("denorm", 1.0), key,
+            cfg["lat"],
+            cfg["lon"],
+            cfg["alt"],
+            cfg["cap"],
+            cfg["tilt"],
+            cfg["az"],
+            cfg["tech"],
+            cfg["iam"],
+            cfg["horizon"],
+            cfg["use_ai"],
+            cfg["sr_csv"],
+            cfg.get("denorm", 1.0),
+            key,
         )
     except Exception as exc:
-        st.error(str(exc)); return
+        st.error(str(exc))
+        return
 
     hourly = _tz_convert(result["hourly"], cfg["tz"])
-    daily  = hourly.groupby(hourly.index.normalize()).agg(
-        energy_kwh=("energy_kwh", "sum"),
-        peak_kw=("power_kw", "max"),
-        avg_ghi=("ghi_wm2", "mean"),
-        cloud_frac=("cloud_cover_frac", "mean"),
-    ).round(2)
+    daily = (
+        hourly.groupby(hourly.index.normalize())
+        .agg(
+            energy_kwh=("energy_kwh", "sum"),
+            peak_kw=("power_kw", "max"),
+            avg_ghi=("ghi_wm2", "mean"),
+            cloud_frac=("cloud_cover_frac", "mean"),
+        )
+        .round(2)
+    )
 
-    st.markdown('<div class="section-title">Daily Summary</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">Daily Summary</div>', unsafe_allow_html=True
+    )
     st.dataframe(daily, use_container_width=True)
 
     c1, c2 = st.columns(2)
-    buf1 = io.StringIO(); hourly.to_csv(buf1)
+    buf1 = io.StringIO()
+    hourly.to_csv(buf1)
     c1.download_button(
-        "⬇ Download hourly CSV", buf1.getvalue().encode(),
-        f"forecast_hourly_{cfg['loc_name'].replace(' ','_')}.csv",
-        "text/csv", use_container_width=True,
+        "⬇ Download hourly CSV",
+        buf1.getvalue().encode(),
+        f"forecast_hourly_{cfg['loc_name'].replace(' ', '_')}.csv",
+        "text/csv",
+        use_container_width=True,
     )
-    buf2 = io.StringIO(); daily.to_csv(buf2)
+    buf2 = io.StringIO()
+    daily.to_csv(buf2)
     c2.download_button(
-        "⬇ Download daily summary CSV", buf2.getvalue().encode(),
-        f"forecast_daily_{cfg['loc_name'].replace(' ','_')}.csv",
-        "text/csv", use_container_width=True,
+        "⬇ Download daily summary CSV",
+        buf2.getvalue().encode(),
+        f"forecast_daily_{cfg['loc_name'].replace(' ', '_')}.csv",
+        "text/csv",
+        use_container_width=True,
     )
 
 
@@ -692,9 +930,16 @@ def tab_reports(cfg: dict):
 @st.cache_data(ttl=60, show_spinner=False)
 def _realtime(lat, lon, alt, cap, tilt, az, tech, iam, resolution, horizon, _key):
     return run_realtime_forecast(
-        lat=lat, lon=lon, altitude=alt, capacity_kw=cap,
-        tilt=tilt, azimuth=az, technology=tech, iam_model=iam,
-        resolution_minutes=resolution, horizon_hours=horizon,
+        lat=lat,
+        lon=lon,
+        altitude=alt,
+        capacity_kw=cap,
+        tilt=tilt,
+        azimuth=az,
+        technology=tech,
+        iam_model=iam,
+        resolution_minutes=resolution,
+        horizon_hours=horizon,
     )
 
 
@@ -703,33 +948,46 @@ def _chart_realtime(curve: pd.DataFrame, tz: str, now_power_kw: float):
     fig = go.Figure()
     if "ghi_clear_wm2" in df.columns and df["ghi_clear_wm2"].max() > 0:
         scale = df["power_kw"].max() / max(df["ghi_clear_wm2"].max(), 1)
-        fig.add_trace(go.Scatter(
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=(df["ghi_clear_wm2"] * scale).clip(lower=0),
+                name="Clear-sky (scaled)",
+                line={"color": "#74c0fc", "width": 1.2, "dash": "dot"},
+            )
+        )
+    fig.add_trace(
+        go.Scatter(
             x=df.index,
-            y=(df["ghi_clear_wm2"] * scale).clip(lower=0),
-            name="Clear-sky (scaled)",
-            line=dict(color="#74c0fc", width=1.2, dash="dot"),
-        ))
-    fig.add_trace(go.Scatter(
-        x=df.index, y=df["power_kw"].clip(lower=0),
-        name="Forecast", fill="tozeroy",
-        line=dict(color="#F4A503", width=2.5),
-        fillcolor="rgba(244,165,3,0.10)",
-    ))
+            y=df["power_kw"].clip(lower=0),
+            name="Forecast",
+            fill="tozeroy",
+            line={"color": "#F4A503", "width": 2.5},
+            fillcolor="rgba(244,165,3,0.10)",
+        )
+    )
     now_ts = pd.Timestamp.now(tz="UTC")
     if tz != "UTC":
-        import pytz
         now_ts = now_ts.tz_convert(tz)
-    fig.add_vline(x=now_ts, line_dash="solid", line_color="#22c55e", line_width=2,
-                  annotation_text="NOW", annotation_position="top right",
-                  annotation_font_color="#22c55e")
+    fig.add_vline(
+        x=now_ts,
+        line_dash="solid",
+        line_color="#22c55e",
+        line_width=2,
+        annotation_text="NOW",
+        annotation_position="top right",
+        annotation_font_color="#22c55e",
+    )
     fig.update_layout(
-        template="plotly_dark", height=320,
-        margin=dict(t=10, b=10, l=0, r=0),
+        template="plotly_dark",
+        height=320,
+        margin={"t": 10, "b": 10, "l": 0, "r": 0},
         yaxis_title="Power (kW)",
-        legend=dict(orientation="h", y=1.05),
-        xaxis=dict(showgrid=False),
-        yaxis=dict(gridcolor="#2a2a3e"),
-        plot_bgcolor="#0E1117", paper_bgcolor="#0E1117",
+        legend={"orientation": "h", "y": 1.05},
+        xaxis={"showgrid": False},
+        yaxis={"gridcolor": "#2a2a3e"},
+        plot_bgcolor="#0E1117",
+        paper_bgcolor="#0E1117",
     )
     return fig
 
@@ -740,6 +998,7 @@ def _chart_realtime(curve: pd.DataFrame, tz: str, now_power_kw: float):
 def tab_realtime(cfg: dict):
     try:
         from streamlit_autorefresh import st_autorefresh
+
         st_autorefresh(interval=60_000, key="rt_refresh")
     except Exception:
         pass
@@ -748,90 +1007,130 @@ def tab_realtime(cfg: dict):
         '<div class="hero-card">'
         '<div class="hero-title">⚡ Real-Time Production</div>'
         '<div class="hero-sub">Sub-hourly estimate · auto-refreshes every 60 s · '
-        'NOW marker shows current moment</div>'
-        '</div>',
+        "NOW marker shows current moment</div>"
+        "</div>",
         unsafe_allow_html=True,
     )
 
     c_res, c_hor = st.columns(2)
-    resolution = c_res.select_slider("Time resolution", options=[5, 10, 15, 30, 60], value=15,
-                                      help="Minutes between data points")
+    resolution = c_res.select_slider(
+        "Time resolution",
+        options=[5, 10, 15, 30, 60],
+        value=15,
+        help="Minutes between data points",
+    )
     horizon = c_hor.slider("Horizon (hours)", 6, 48, 24)
 
     key_rt = pd.Timestamp.now(tz="UTC").floor("1min").isoformat()
     with st.spinner("Computing real-time estimate…"):
         try:
             rt = _realtime(
-                cfg["lat"], cfg["lon"], cfg["alt"], cfg["cap"],
-                cfg["tilt"], cfg["az"], cfg["tech"], cfg["iam"],
-                resolution, horizon, key_rt,
+                cfg["lat"],
+                cfg["lon"],
+                cfg["alt"],
+                cfg["cap"],
+                cfg["tilt"],
+                cfg["az"],
+                cfg["tech"],
+                cfg["iam"],
+                resolution,
+                horizon,
+                key_rt,
             )
         except Exception as exc:
-            st.error(f"Real-time forecast error: {exc}"); return
+            st.error(f"Real-time forecast error: {exc}")
+            return
 
-    now_kw  = rt["now_power_kw"]
-    curve   = rt["curve"]
-    atm     = rt.get("atmosphere", {})
+    now_kw = rt["now_power_kw"]
+    curve = rt["curve"]
+    atm = rt.get("atmosphere", {})
     now_utc = pd.Timestamp(rt["now_utc"])
     day_kwh = float(curve["energy_kwh"].sum())
     peak_kw = float(curve["power_kw"].max())
-    source  = atm.get("source", "climatology")
+    source = atm.get("source", "climatology")
     src_lbl = "🛰 CAMS data" if source == "cams" else "📊 Weather model"
 
     cols = st.columns(4)
-    _kpi(cols[0], "Right now",    f"{now_kw:.3f} kW",  now_utc.strftime("%H:%M UTC"))
+    _kpi(cols[0], "Right now", f"{now_kw:.3f} kW", now_utc.strftime("%H:%M UTC"))
     _kpi(cols[1], "Peak (period)", f"{peak_kw:.2f} kW")
     _kpi(cols[2], f"{horizon}h energy", f"{day_kwh:.2f} kWh")
-    _kpi(cols[3], "Atmosphere",   src_lbl, f"AOD {atm.get('aod_550nm_mean', 0):.3f}")
+    _kpi(cols[3], "Atmosphere", src_lbl, f"AOD {atm.get('aod_550nm_mean', 0):.3f}")
 
     st.markdown("")
-    st.markdown('<div class="section-title">Live production curve</div>', unsafe_allow_html=True)
-    st.plotly_chart(_chart_realtime(curve, cfg.get("tz", "UTC"), now_kw),
-                    use_container_width=True)
+    st.markdown(
+        '<div class="section-title">Live production curve</div>', unsafe_allow_html=True
+    )
+    st.plotly_chart(
+        _chart_realtime(curve, cfg.get("tz", "UTC"), now_kw), use_container_width=True
+    )
 
     if cfg.get("level", 1) >= 2:
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown('<div class="section-title">Clearness index (Kt)</div>',
-                        unsafe_allow_html=True)
-            fig_kt = go.Figure(go.Scatter(
-                x=curve.index, y=curve["kt"].clip(0, 1.2),
-                fill="tozeroy", line=dict(color="#a78bfa", width=1.8),
-                fillcolor="rgba(167,139,250,0.12)",
-            ))
-            fig_kt.update_layout(template="plotly_dark", height=200,
-                                 margin=dict(t=5, b=5, l=0, r=0),
-                                 yaxis=dict(range=[0, 1.2], gridcolor="#2a2a3e"),
-                                 plot_bgcolor="#0E1117", paper_bgcolor="#0E1117")
+            st.markdown(
+                '<div class="section-title">Clearness index (Kt)</div>',
+                unsafe_allow_html=True,
+            )
+            fig_kt = go.Figure(
+                go.Scatter(
+                    x=curve.index,
+                    y=curve["kt"].clip(0, 1.2),
+                    fill="tozeroy",
+                    line={"color": "#a78bfa", "width": 1.8},
+                    fillcolor="rgba(167,139,250,0.12)",
+                )
+            )
+            fig_kt.update_layout(
+                template="plotly_dark",
+                height=200,
+                margin={"t": 5, "b": 5, "l": 0, "r": 0},
+                yaxis={"range": [0, 1.2], "gridcolor": "#2a2a3e"},
+                plot_bgcolor="#0E1117",
+                paper_bgcolor="#0E1117",
+            )
             st.plotly_chart(fig_kt, use_container_width=True)
         with c2:
-            st.markdown('<div class="section-title">Cell temperature (°C)</div>',
-                        unsafe_allow_html=True)
-            fig_t = go.Figure(go.Scatter(
-                x=curve.index, y=curve["t_cell_c"],
-                line=dict(color="#f87171", width=1.8),
-            ))
-            fig_t.update_layout(template="plotly_dark", height=200,
-                                margin=dict(t=5, b=5, l=0, r=0),
-                                yaxis=dict(gridcolor="#2a2a3e"),
-                                plot_bgcolor="#0E1117", paper_bgcolor="#0E1117")
+            st.markdown(
+                '<div class="section-title">Cell temperature (°C)</div>',
+                unsafe_allow_html=True,
+            )
+            fig_t = go.Figure(
+                go.Scatter(
+                    x=curve.index,
+                    y=curve["t_cell_c"],
+                    line={"color": "#f87171", "width": 1.8},
+                )
+            )
+            fig_t.update_layout(
+                template="plotly_dark",
+                height=200,
+                margin={"t": 5, "b": 5, "l": 0, "r": 0},
+                yaxis={"gridcolor": "#2a2a3e"},
+                plot_bgcolor="#0E1117",
+                paper_bgcolor="#0E1117",
+            )
             st.plotly_chart(fig_t, use_container_width=True)
 
     if cfg.get("level", 1) >= 3:
         with st.expander("Atmospheric diagnostics"):
-            st.json({
-                "source":                atm.get("source", "climatology"),
-                "aod_550nm":             round(atm.get("aod_550nm_mean", 0), 4),
-                "ozone_du":              round(atm.get("ozone_du_mean", 0), 1),
-                "precipitable_water_cm": round(atm.get("precipitable_water_cm", 0), 2),
-            })
+            st.json(
+                {
+                    "source": atm.get("source", "climatology"),
+                    "aod_550nm": round(atm.get("aod_550nm_mean", 0), 4),
+                    "ozone_du": round(atm.get("ozone_du_mean", 0), 1),
+                    "precipitable_water_cm": round(
+                        atm.get("precipitable_water_cm", 0), 2
+                    ),
+                }
+            )
         buf = io.StringIO()
         _tz_convert(curve, cfg.get("tz", "UTC")).to_csv(buf)
         st.download_button(
             "⬇ Download real-time CSV",
             buf.getvalue().encode(),
-            f"realtime_{cfg['loc_name'].replace(' ','_')}.csv",
-            "text/csv", use_container_width=True,
+            f"realtime_{cfg['loc_name'].replace(' ', '_')}.csv",
+            "text/csv",
+            use_container_width=True,
         )
 
 
@@ -842,20 +1141,26 @@ def tab_settings(cfg: dict):
     st.markdown('<div class="section-title">Data Sources</div>', unsafe_allow_html=True)
     _data_status_section(expanded=True)
 
-    st.markdown('<div class="section-title">System Status</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">System Status</div>', unsafe_allow_html=True
+    )
     st.success("✓ Demo mode — works instantly without any API keys or setup")
 
     ai_path = Path("models/kt_xgb.joblib")
     if ai_path.exists():
         st.success(f"✓ AI model ready: {ai_path} ({ai_path.stat().st_size // 1024} KB)")
     else:
-        st.info("ℹ No AI model — running pure physics mode. See Model Training tab to train one.")
+        st.info(
+            "ℹ No AI model — running pure physics mode. See Model Training tab to train one."
+        )
 
     ghi_path = Path("models/ghi_historical.joblib")
     if ghi_path.exists():
         st.success(f"✓ Historical GHI model: {ghi_path}")
 
-    st.markdown('<div class="section-title">Physics Engine</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">Physics Engine</div>', unsafe_allow_html=True
+    )
     st.markdown("""
 | Component | Implementation |
 |---|---|
@@ -865,7 +1170,7 @@ def tab_settings(cfg: dict):
 | Spectral integration | ∫ SR(λ) × I(λ) × IAM(θ) dλ per timestep |
 | AI correction | XGBoost Kt regressor (21 features) |
 | Cell temperature | NOCT model |
-| Version | 2.1.0 |
+| Version | 2.2.0 |
 """)
 
     ds = _get_data_status()
@@ -888,7 +1193,9 @@ setup_cron()
 # Tab: Model Training
 # ═══════════════════════════════════════════════════════════════════
 def tab_training():
-    st.markdown('<div class="section-title">🧠 AI Model Training</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">🧠 AI Model Training</div>', unsafe_allow_html=True
+    )
     ai_path = Path("models/kt_xgb.joblib")
     if ai_path.exists():
         st.success(f"✓ Model ready: `{ai_path}` ({ai_path.stat().st_size // 1024} KB)")
@@ -927,17 +1234,31 @@ python scripts/02_train_kt_model.py --cv 5
 def main():
     cfg = _sidebar()
 
-    tabs = st.tabs([
-        "📊 Dashboard", "⚡ Real-Time", "☀️ Forecast",
-        "📍 Locations", "📁 Reports", "⚙️ Settings", "🧠 Model Training",
-    ])
-    with tabs[0]: tab_dashboard(cfg)
-    with tabs[1]: tab_realtime(cfg)
-    with tabs[2]: tab_forecast(cfg)
-    with tabs[3]: tab_locations(cfg)
-    with tabs[4]: tab_reports(cfg)
-    with tabs[5]: tab_settings(cfg)
-    with tabs[6]: tab_training()
+    tabs = st.tabs(
+        [
+            "📊 Dashboard",
+            "⚡ Real-Time",
+            "☀️ Forecast",
+            "📍 Locations",
+            "📁 Reports",
+            "⚙️ Settings",
+            "🧠 Model Training",
+        ]
+    )
+    with tabs[0]:
+        tab_dashboard(cfg)
+    with tabs[1]:
+        tab_realtime(cfg)
+    with tabs[2]:
+        tab_forecast(cfg)
+    with tabs[3]:
+        tab_locations(cfg)
+    with tabs[4]:
+        tab_reports(cfg)
+    with tabs[5]:
+        tab_settings(cfg)
+    with tabs[6]:
+        tab_training()
 
 
 if __name__ == "__main__":

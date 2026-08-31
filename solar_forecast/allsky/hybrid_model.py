@@ -35,13 +35,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .ai_trainer import KtTrainer
 from .physics_kt import (
     compute_physics_kt,
+    decompose_allsky,
     estimate_cod_from_cover,
     kt_to_allsky_ghi,
-    decompose_allsky,
 )
-from .ai_trainer import KtTrainer
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +55,8 @@ class AllSkyModel:
     """
 
     def __init__(self, cfg: dict):
-        self.cfg     = cfg
-        self.alpha   = float(cfg["model"].get("physics_weight", 0.40))
+        self.cfg = cfg
+        self.alpha = float(cfg["model"].get("physics_weight", 0.40))
         self._trainer = KtTrainer(cfg)
         self._ai_ready = False
 
@@ -65,8 +65,11 @@ class AllSkyModel:
         try:
             self._trainer.load(path)
             self._ai_ready = True
-            logger.info("AI Kt model loaded (α=%.2f phys, %.2f AI).",
-                        self.alpha, 1.0 - self.alpha)
+            logger.info(
+                "AI Kt model loaded (α=%.2f phys, %.2f AI).",
+                self.alpha,
+                1.0 - self.alpha,
+            )
         except FileNotFoundError:
             logger.warning("No trained Kt model found — physics-only mode.")
             self._ai_ready = False
@@ -97,7 +100,7 @@ class AllSkyModel:
         """
         # Align to requested timestamps
         atmo = atmo_df.reindex(times, method="nearest", tolerance="31min")
-        cs   = clearsky_df.reindex(times, method="nearest", tolerance="31min")
+        cs = clearsky_df.reindex(times, method="nearest", tolerance="31min")
 
         # Cloud optical depth
         if "cloud_optical_depth" in atmo.columns:
@@ -106,39 +109,47 @@ class AllSkyModel:
             cod = estimate_cod_from_cover(atmo["cloud_cover"].fillna(0).values)
 
         # SSA and asymmetry from CAMS (or defaults for live mode)
-        ssa       = atmo.get("ssa_550nm",      pd.Series(0.92, index=atmo.index)).fillna(0.92).values
-        asymmetry = atmo.get("asymmetry_factor", pd.Series(0.65, index=atmo.index)).fillna(0.65).values
+        ssa = (
+            atmo.get("ssa_550nm", pd.Series(0.92, index=atmo.index)).fillna(0.92).values
+        )
+        asymmetry = (
+            atmo.get("asymmetry_factor", pd.Series(0.65, index=atmo.index))
+            .fillna(0.65)
+            .values
+        )
 
         # ── Physics Kt ────────────────────────────────────────────────────
         kt_phys = compute_physics_kt(
-            cloud_cover        =atmo["cloud_cover"].fillna(0).values,
+            cloud_cover=atmo["cloud_cover"].fillna(0).values,
             cloud_optical_depth=cod,
-            cos_zenith         =cs["cos_zenith"].values,
-            airmass            =cs["airmass"].values,
-            aod_550nm          =atmo.get("aod_550nm", pd.Series(0.1, index=atmo.index)).fillna(0.1).values,
-            ghi_clear          =cs["ghi_clear"].values,
-            dni_clear          =cs["dni_clear"].values,
-            dhi_clear          =cs["dhi_clear"].values,
-            ssa                =ssa,
-            asymmetry          =asymmetry,
+            cos_zenith=cs["cos_zenith"].values,
+            airmass=cs["airmass"].values,
+            aod_550nm=atmo.get("aod_550nm", pd.Series(0.1, index=atmo.index))
+            .fillna(0.1)
+            .values,
+            ghi_clear=cs["ghi_clear"].values,
+            dni_clear=cs["dni_clear"].values,
+            dhi_clear=cs["dhi_clear"].values,
+            ssa=ssa,
+            asymmetry=asymmetry,
         )
 
         # ── AI Kt ─────────────────────────────────────────────────────────
         if self._ai_ready:
             feature_df = atmo.copy()
             feature_df["cos_zenith"] = cs["cos_zenith"].values
-            feature_df["airmass"]    = cs["airmass"].values
-            feature_df["ghi_clear"]  = cs["ghi_clear"].values
-            feature_df["dni_clear"]  = cs["dni_clear"].values
-            feature_df["dhi_clear"]  = cs["dhi_clear"].values
-            feature_df["Kt_phys"]    = kt_phys
+            feature_df["airmass"] = cs["airmass"].values
+            feature_df["ghi_clear"] = cs["ghi_clear"].values
+            feature_df["dni_clear"] = cs["dni_clear"].values
+            feature_df["dhi_clear"] = cs["dhi_clear"].values
+            feature_df["Kt_phys"] = kt_phys
             kt_ai = self._trainer.predict(feature_df)
         else:
-            kt_ai = kt_phys   # physics-only fallback
+            kt_ai = kt_phys  # physics-only fallback
 
         # ── Blend ─────────────────────────────────────────────────────────
-        alpha   = self.alpha
-        kt_raw  = np.where(
+        alpha = self.alpha
+        kt_raw = np.where(
             np.isnan(kt_phys),
             kt_ai,
             alpha * kt_phys + (1.0 - alpha) * kt_ai,
@@ -150,22 +161,25 @@ class AllSkyModel:
 
         # ── Decompose → DNI, DHI ──────────────────────────────────────────
         dni, dhi = decompose_allsky(
-            ghi_all   =ghi,
-            ghi_clear =cs["ghi_clear"].values,
-            dni_clear =cs["dni_clear"].values,
-            dhi_clear =cs["dhi_clear"].values,
+            ghi_all=ghi,
+            ghi_clear=cs["ghi_clear"].values,
+            dni_clear=cs["dni_clear"].values,
+            dhi_clear=cs["dhi_clear"].values,
             cos_zenith=cs["cos_zenith"].values,
         )
 
-        result = pd.DataFrame({
-            "kt":         kt,
-            "ghi":        ghi,
-            "dni":        dni,
-            "dhi":        dhi,
-            "ghi_clear":  cs["ghi_clear"].values,
-            "poa_clear":  cs["poa_clear"].values,
-            "zenith":     cs["zenith"].values,
-            "cos_zenith": cs["cos_zenith"].values,
-        }, index=times)
+        result = pd.DataFrame(
+            {
+                "kt": kt,
+                "ghi": ghi,
+                "dni": dni,
+                "dhi": dhi,
+                "ghi_clear": cs["ghi_clear"].values,
+                "poa_clear": cs["poa_clear"].values,
+                "zenith": cs["zenith"].values,
+                "cos_zenith": cs["cos_zenith"].values,
+            },
+            index=times,
+        )
 
         return result

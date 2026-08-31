@@ -9,14 +9,15 @@ Data tier priority (4-tier fallback)
 """
 
 from __future__ import annotations
+
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 
 log = logging.getLogger(__name__)
+
 
 # Ångström exponent derived from multi-wavelength AOD (550/870 pair)
 def _angstrom_exponent(aod_550: float, aod_865: float) -> float:
@@ -32,11 +33,11 @@ _DEMO = {
     "aod_670": 0.09,
     "aod_865": 0.06,
     "angstrom_exponent": 1.3,
-    "total_column_water_vapour": 15.0,   # kg/m²
-    "total_column_ozone": 0.006642,      # kg/m² (~310 DU)
-    "surface_pressure": 101325.0,         # Pa
-    "boundary_layer_height": 1000.0,      # m
-    "temperature_2m": 293.15,             # K
+    "total_column_water_vapour": 15.0,  # kg/m²
+    "total_column_ozone": 0.006642,  # kg/m² (~310 DU)
+    "surface_pressure": 101325.0,  # Pa
+    "boundary_layer_height": 1000.0,  # m
+    "temperature_2m": 293.15,  # K
     "cloud_cover": 50.0,
     "cloud_cover_low": 20.0,
     "cloud_cover_mid": 20.0,
@@ -50,8 +51,8 @@ _DEMO = {
 
 def build_feature_frame(
     location_id: int,
-    start_utc: Optional[str] = None,
-    end_utc: Optional[str] = None,
+    start_utc: str | None = None,
+    end_utc: str | None = None,
     horizon_hours: int = 72,
 ) -> tuple[pd.DataFrame, str]:
     """Build merged feature frame for a location.
@@ -65,8 +66,8 @@ def build_feature_frame(
         start_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:00:00")
     if end_utc is None:
         end_utc = (
-            datetime.fromisoformat(start_utc.replace("Z", "+00:00")) +
-            timedelta(hours=horizon_hours)
+            datetime.fromisoformat(start_utc.replace("Z", "+00:00"))
+            + timedelta(hours=horizon_hours)
         ).strftime("%Y-%m-%dT%H:00:00")
 
     cams_df = _load_cams(location_id, start_utc, end_utc)
@@ -89,9 +90,11 @@ def build_feature_frame(
 # Internal loaders
 # ---------------------------------------------------------------------------
 
+
 def _load_cams(location_id: int, start_utc: str, end_utc: str) -> pd.DataFrame:
     try:
         from solar_forecast.db.manager import query_cams
+
         return query_cams(location_id, start_utc, end_utc)
     except Exception as exc:
         log.debug("CAMS query failed: %s", exc)
@@ -101,6 +104,7 @@ def _load_cams(location_id: int, start_utc: str, end_utc: str) -> pd.DataFrame:
 def _load_om(location_id: int, start_utc: str, end_utc: str) -> pd.DataFrame:
     try:
         from solar_forecast.db.manager import query_openmeteo
+
         return query_openmeteo(location_id, start_utc, end_utc)
     except Exception as exc:
         log.debug("OpenMeteo query failed: %s", exc)
@@ -110,6 +114,7 @@ def _load_om(location_id: int, start_utc: str, end_utc: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Frame builders
 # ---------------------------------------------------------------------------
+
 
 def _add_derived_cams(df: pd.DataFrame) -> pd.DataFrame:
     """Add Ångström exponent and other derived CAMS columns."""
@@ -140,9 +145,14 @@ def _merge_cams_om(cams: pd.DataFrame, om: pd.DataFrame) -> tuple[pd.DataFrame, 
 
     # Fill CAMS cols with climatology where NaN
     cams_numeric_cols = [
-        "aod_550", "aod_469", "aod_670", "aod_865",
-        "total_column_water_vapour", "total_column_ozone",
-        "surface_pressure", "boundary_layer_height",
+        "aod_550",
+        "aod_469",
+        "aod_670",
+        "aod_865",
+        "total_column_water_vapour",
+        "total_column_ozone",
+        "surface_pressure",
+        "boundary_layer_height",
     ]
     tier = "cams_om"
     for col in cams_numeric_cols:

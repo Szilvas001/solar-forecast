@@ -20,7 +20,6 @@ from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -34,7 +33,8 @@ DEFAULT_CONFIG = Path(__file__).resolve().parent / "config_default.yaml"
 
 # ── Config ────────────────────────────────────────────────────────────────
 
-def load_config(path: Optional[str] = None) -> dict:
+
+def load_config(path: str | None = None) -> dict:
     p = Path(path) if path else DEFAULT_CONFIG
     with open(p) as f:
         return yaml.safe_load(f)
@@ -52,7 +52,9 @@ def parse_leadtime(spec: str) -> list[str]:
 def determine_forecast(schedule: dict) -> tuple[str, str]:
     """Most recent forecast run available given the current UTC time."""
     now = datetime.utcnow()
-    for time_str, avail_hour in sorted(schedule.items(), key=lambda x: x[1], reverse=True):
+    for time_str, avail_hour in sorted(
+        schedule.items(), key=lambda x: x[1], reverse=True
+    ):
         if now.hour >= int(avail_hour):
             return now.strftime("%Y-%m-%d"), time_str
     latest = max(schedule, key=schedule.get)
@@ -61,18 +63,21 @@ def determine_forecast(schedule: dict) -> tuple[str, str]:
 
 # ── Request build ─────────────────────────────────────────────────────────
 
-def build_request(ds_cfg: dict, cfg: dict, forecast_date: str, forecast_time: str) -> dict:
+
+def build_request(
+    ds_cfg: dict, cfg: dict, forecast_date: str, forecast_time: str
+) -> dict:
     t = cfg["target"]
     lat, lon, margin = t["lat"], t["lon"], t["area_margin"]
 
     req = {
         "variable": ds_cfg["variables"],
-        "date":     [f"{forecast_date}/{forecast_date}"],
-        "time":     [forecast_time],
+        "date": [f"{forecast_date}/{forecast_date}"],
+        "time": [forecast_time],
         "leadtime_hour": parse_leadtime(ds_cfg["leadtime_hours"]),
-        "type":     ["forecast"],
+        "type": ["forecast"],
         "data_format": "grib",
-        "area":     [lat + margin, lon - margin, lat - margin, lon + margin],
+        "area": [lat + margin, lon - margin, lat - margin, lon + margin],
     }
 
     if "model_levels" in ds_cfg:
@@ -83,6 +88,7 @@ def build_request(ds_cfg: dict, cfg: dict, forecast_date: str, forecast_time: st
 
 # ── Pipeline: download → parse → DB ──────────────────────────────────────
 
+
 def fetch_and_insert(
     client,
     ds_cfg: dict,
@@ -91,9 +97,9 @@ def fetch_and_insert(
     forecast_time: str,
     dry_run: bool = False,
 ) -> str:
-    name  = ds_cfg["name"]
+    name = ds_cfg["name"]
     table = ds_cfg["target_table"]
-    pk    = ds_cfg["primary_key"]
+    pk = ds_cfg["primary_key"]
     target = cfg["target"]
 
     req = build_request(ds_cfg, cfg, forecast_date, forecast_time)
@@ -139,11 +145,14 @@ def fetch_and_insert(
 
 # ── Phases ───────────────────────────────────────────────────────────────
 
+
 def phase_live(cfg, client, forecast_date, forecast_time, dry_run) -> list[str]:
     results = []
     for ds in cfg["datasets"]:
         try:
-            results.append(fetch_and_insert(client, ds, cfg, forecast_date, forecast_time, dry_run))
+            results.append(
+                fetch_and_insert(client, ds, cfg, forecast_date, forecast_time, dry_run)
+            )
         except Exception as exc:
             err = f"[{ds['name']}] LIVE ERROR: {exc}"
             log.error(err)
@@ -191,16 +200,17 @@ def phase_backfill(cfg, client, dry_run) -> list[str]:
 
 # ── Email ─────────────────────────────────────────────────────────────────
 
+
 def send_email(cfg: dict, results: list[str]) -> None:
     email_cfg = cfg.get("email", {})
     if not email_cfg.get("enabled", False):
         return
 
-    smtp_server   = os.getenv("SMTP_SERVER")
-    smtp_port     = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user     = os.getenv("SMTP_USER")
+    smtp_server = os.getenv("SMTP_SERVER")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
     smtp_password = os.getenv("SMTP_PASSWORD")
-    recipient     = email_cfg.get("recipient", "")
+    recipient = email_cfg.get("recipient", "")
 
     if not all([smtp_server, smtp_user, smtp_password, recipient]):
         log.warning("SMTP not fully configured, skipping email")
@@ -213,7 +223,7 @@ def send_email(cfg: dict, results: list[str]) -> None:
     )
     msg = MIMEMultipart("alternative")
     msg["From"] = smtp_user
-    msg["To"]   = recipient
+    msg["To"] = recipient
     msg["Subject"] = f"CAMS Fetcher – {now_str}"
     msg.attach(MIMEText(body, "html"))
 
@@ -229,18 +239,23 @@ def send_email(cfg: dict, results: list[str]) -> None:
 
 # ── Public entry point ────────────────────────────────────────────────────
 
+
 def run_once(
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
     dry_run: bool = False,
 ) -> list[str]:
     """Run the full fetch pipeline once. Returns the list of result strings."""
     cfg = load_config(config_path)
 
     forecast_date, forecast_time = determine_forecast(cfg["schedule"])
-    log.info("target=%s coord=%.4f,%.4f run=%s %s",
-             cfg["target"].get("name", "-"),
-             cfg["target"]["lat"], cfg["target"]["lon"],
-             forecast_date, forecast_time)
+    log.info(
+        "target=%s coord=%.4f,%.4f run=%s %s",
+        cfg["target"].get("name", "-"),
+        cfg["target"]["lat"],
+        cfg["target"]["lon"],
+        forecast_date,
+        forecast_time,
+    )
 
     client = get_client()
     log.info("ECMWF CADS client ready")
@@ -258,8 +273,10 @@ def run_once(
 
 # ── CLI ───────────────────────────────────────────────────────────────────
 
+
 def _cli():
     import argparse
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",

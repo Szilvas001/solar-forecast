@@ -4,6 +4,38 @@ All notable changes to **AI Solar Production Forecast SaaS** are documented here
 
 ---
 
+## [2.2.0] — 2026-08-31
+
+### Added
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) — lint + format (ruff) and the
+  pytest suite on Python 3.10 / 3.11 / 3.12 for every push and pull request
+- **Community scaffolding** — `CONTRIBUTING.md`, PR template, bug-report and
+  feature-request issue templates
+- **`scripts/load_demo_to_postgres.py`** — idempotent PostgreSQL loader for the
+  bundled demo CSV (creates the `solar_forecast` database and `demo_forecast`
+  table if missing, upserts on the primary key)
+
+### Changed
+- **Packaging migrated from `setup.py` to `pyproject.toml`** — single source of
+  truth for metadata, dependency groups (`cams`, `dev`), console scripts and
+  ruff/pytest configuration; `scripts` is now a proper package so the `sf-*`
+  entry points install correctly
+- **Code style** — repository consistent with **ruff** (lint + format); all
+  fixable issues (unused imports, collection calls, exception chaining, ambiguous
+  variable names, late-binding closures) cleaned up
+- **Version unified to 2.2.0** across `pyproject.toml`, FastAPI metadata,
+  `/health`, dashboard and model registry
+- **README rewritten** as a portfolio-grade reference — badges, quick start,
+  API table, architecture diagram, quality and layout sections
+
+### Fixed
+- `raise ... from exc` exception chaining in API routes (`ingestion`, `forecast`,
+  `features`, `locations`, `model`)
+- Late-binding closure over loop variable in `spectrl2_model` (`_integrate`)
+- `.ruff_cache/` added to `.gitignore`
+
+---
+
 ## [2.1.0] — 2026-05-03
 
 ### Added

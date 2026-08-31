@@ -88,8 +88,9 @@ The `CamsScheduler` class is also available as a daemon thread if you prefer in-
 
 ```python
 from solar_forecast.cams_fetcher.scheduler import CamsScheduler
+
 scheduler = CamsScheduler()
-scheduler.start()   # daemon thread — stops with the main process
+scheduler.start()  # daemon thread — stops with the main process
 ```
 
 ---

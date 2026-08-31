@@ -17,13 +17,12 @@ expected to be available (the `availability` UTC hour from the config).
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Optional
 
 from .runner import load_config, run_once
 
@@ -31,6 +30,7 @@ log = logging.getLogger(__name__)
 
 
 # ── In-process scheduler ──────────────────────────────────────────────────
+
 
 class CamsScheduler:
     """Run `run_once()` shortly after every configured CAMS run becomes
@@ -43,15 +43,15 @@ class CamsScheduler:
 
     def __init__(
         self,
-        config_path: Optional[str] = None,
+        config_path: str | None = None,
         offset_minutes: int = 15,
-        on_complete: Optional[Callable[[list[str]], None]] = None,
+        on_complete: Callable[[list[str]], None] | None = None,
     ):
         self.config_path = config_path
         self.offset_minutes = offset_minutes
         self.on_complete = on_complete
         self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     # --- public lifecycle ------------------------------------------------
 
@@ -80,22 +80,27 @@ class CamsScheduler:
         availability_hours = sorted(int(h) for h in sched.values())
         now = datetime.utcnow()
         for h in availability_hours:
-            cand = now.replace(hour=h, minute=self.offset_minutes,
-                               second=0, microsecond=0)
+            cand = now.replace(
+                hour=h, minute=self.offset_minutes, second=0, microsecond=0
+            )
             if cand > now:
                 return cand
         # All today's runs done — first run of tomorrow
         h0 = availability_hours[0]
         tomorrow = now + timedelta(days=1)
-        return tomorrow.replace(hour=h0, minute=self.offset_minutes,
-                                second=0, microsecond=0)
+        return tomorrow.replace(
+            hour=h0, minute=self.offset_minutes, second=0, microsecond=0
+        )
 
     def _loop(self) -> None:
         while not self._stop.is_set():
             target = self._next_run_time()
             wait_s = max(1.0, (target - datetime.utcnow()).total_seconds())
-            log.info("next CAMS fetch at %s UTC (sleep %.0fs)",
-                     target.isoformat(timespec="seconds"), wait_s)
+            log.info(
+                "next CAMS fetch at %s UTC (sleep %.0fs)",
+                target.isoformat(timespec="seconds"),
+                wait_s,
+            )
 
             # sleep in small chunks so stop() responds quickly
             while wait_s > 0 and not self._stop.is_set():
@@ -115,8 +120,9 @@ class CamsScheduler:
 
 # ── Cron setup ────────────────────────────────────────────────────────────
 
+
 def setup_cron(
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
     log_dir: str = "logs",
     install: bool = True,
 ) -> str:
@@ -152,9 +158,8 @@ def setup_cron(
 
     # Replace any existing cams-fetcher cron lines
     import subprocess
-    existing = subprocess.run(
-        ["crontab", "-l"], capture_output=True, text=True
-    ).stdout
+
+    existing = subprocess.run(["crontab", "-l"], capture_output=True, text=True).stdout
     keep = [ln for ln in existing.splitlines() if "cams-fetcher" not in ln]
     new_cron = "\n".join(keep + lines) + "\n"
     subprocess.run(["crontab", "-"], input=new_cron, text=True, check=True)

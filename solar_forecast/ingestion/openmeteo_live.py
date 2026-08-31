@@ -9,11 +9,10 @@ CLI
 """
 
 from __future__ import annotations
+
 import argparse
 import logging
 import sys
-from datetime import datetime, timezone
-from typing import Optional
 
 import pandas as pd
 import requests
@@ -47,17 +46,17 @@ def fetch_openmeteo(
     lon: float,
     hours: int = 72,
     timezone_str: str = "UTC",
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Download Open-Meteo forecast and return a wide DataFrame.
 
     Returns columns: valid_time_utc + one column per variable.
     Returns None on network/parse failure.
     """
     params = {
-        "latitude":  lat,
+        "latitude": lat,
         "longitude": lon,
-        "hourly":    ",".join(_OM_VARIABLES),
-        "timezone":  timezone_str,
+        "hourly": ",".join(_OM_VARIABLES),
+        "timezone": timezone_str,
         "forecast_days": max(1, (hours + 23) // 24),
     }
     try:
@@ -83,7 +82,9 @@ def fetch_openmeteo(
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    log.info("Open-Meteo: fetched %d hourly rows (lat=%.3f lon=%.3f)", len(df), lat, lon)
+    log.info(
+        "Open-Meteo: fetched %d hourly rows (lat=%.3f lon=%.3f)", len(df), lat, lon
+    )
     return df
 
 
@@ -91,8 +92,8 @@ def run_openmeteo_live(
     location_id: int,
     hours: int = 72,
     dry_run: bool = False,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
     timezone_str: str = "UTC",
 ) -> dict:
     """Fetch and store Open-Meteo forecast for a location.
@@ -102,6 +103,7 @@ def run_openmeteo_live(
     if lat is None or lon is None:
         try:
             from solar_forecast.db.manager import get_location
+
             loc = get_location(location_id)
             if loc is None:
                 raise ValueError(f"Location {location_id} not found in DB")
@@ -120,11 +122,16 @@ def run_openmeteo_live(
     status["rows_fetched"] = len(df)
 
     if dry_run:
-        log.info("[DRY-RUN] would store %d Open-Meteo rows for location %d", len(df), location_id)
+        log.info(
+            "[DRY-RUN] would store %d Open-Meteo rows for location %d",
+            len(df),
+            location_id,
+        )
         return status
 
     try:
         from solar_forecast.db.manager import upsert_openmeteo
+
         n = upsert_openmeteo(df, location_id)
         status["rows_inserted"] = n
         log.info("stored %d new Open-Meteo rows for location %d", n, location_id)
@@ -143,10 +150,14 @@ def _cli():
     )
     p = argparse.ArgumentParser(description="Open-Meteo live forecast ingestion")
     p.add_argument("--location-id", type=int, required=True, help="Location ID from DB")
-    p.add_argument("--hours", type=int, default=72, help="Forecast horizon hours (default 72)")
+    p.add_argument(
+        "--hours", type=int, default=72, help="Forecast horizon hours (default 72)"
+    )
     p.add_argument("--lat", type=float, default=None, help="Override latitude")
     p.add_argument("--lon", type=float, default=None, help="Override longitude")
-    p.add_argument("--timezone", type=str, default="UTC", help="Timezone string (default UTC)")
+    p.add_argument(
+        "--timezone", type=str, default="UTC", help="Timezone string (default UTC)"
+    )
     p.add_argument("--dry-run", action="store_true", help="Don't write to DB")
     args = p.parse_args()
 

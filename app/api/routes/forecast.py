@@ -6,7 +6,6 @@ import io
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
@@ -15,8 +14,14 @@ from fastapi.responses import StreamingResponse
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from app.api.models import (
-    ConfidenceOut, ForecastOut, ForecastRequest, ForecastSummary,
-    HourlyPoint, RealtimeOut, RealtimePoint, RealtimeRequest,
+    ConfidenceOut,
+    ForecastOut,
+    ForecastRequest,
+    ForecastSummary,
+    HourlyPoint,
+    RealtimeOut,
+    RealtimePoint,
+    RealtimeRequest,
 )
 from app.db import sqlite_manager as db
 from solar_forecast.demo.pipeline import run_demo_forecast, run_realtime_forecast
@@ -27,6 +32,7 @@ router = APIRouter(tags=["forecast"])
 def _confidence(result: dict, req_tech: str, use_ai: bool) -> ConfidenceOut:
     try:
         from solar_forecast.engine.confidence import compute_confidence
+
         atm_src = result.get("atmosphere", {}).get("source", "climatology")
         c = compute_confidence(
             atmosphere_source=atm_src,
@@ -37,29 +43,39 @@ def _confidence(result: dict, req_tech: str, use_ai: bool) -> ConfidenceOut:
         )
         return ConfidenceOut(**c)
     except Exception:
-        return ConfidenceOut(confidence_pct=65, confidence_label="Medium", confidence_reasons=[])
+        return ConfidenceOut(
+            confidence_pct=65, confidence_label="Medium", confidence_reasons=[]
+        )
 
 
 def _build_hourly(hourly_df: pd.DataFrame) -> list[HourlyPoint]:
     points = []
     for row in hourly_df.itertuples():
         # energy_kwh = power_kw × 1h for hourly data (already correctly stored)
-        points.append(HourlyPoint(
-            timestamp_utc=str(row.Index),
-            ghi_wm2=float(getattr(row, "ghi_wm2", 0) or 0),
-            power_kw=float(getattr(row, "power_kw", 0) or 0),
-            energy_kwh=float(getattr(row, "energy_kwh", 0) or 0),
-            kt=float(row.kt) if hasattr(row, "kt") and pd.notna(row.kt) else None,
-            t_cell_c=float(row.t_cell_c) if hasattr(row, "t_cell_c") and pd.notna(row.t_cell_c) else None,
-            spectral_mm=float(row.spectral_mm) if hasattr(row, "spectral_mm") and pd.notna(row.spectral_mm) else None,
-            iam=float(row.iam) if hasattr(row, "iam") and pd.notna(row.iam) else None,
-        ))
+        points.append(
+            HourlyPoint(
+                timestamp_utc=str(row.Index),
+                ghi_wm2=float(getattr(row, "ghi_wm2", 0) or 0),
+                power_kw=float(getattr(row, "power_kw", 0) or 0),
+                energy_kwh=float(getattr(row, "energy_kwh", 0) or 0),
+                kt=float(row.kt) if hasattr(row, "kt") and pd.notna(row.kt) else None,
+                t_cell_c=float(row.t_cell_c)
+                if hasattr(row, "t_cell_c") and pd.notna(row.t_cell_c)
+                else None,
+                spectral_mm=float(row.spectral_mm)
+                if hasattr(row, "spectral_mm") and pd.notna(row.spectral_mm)
+                else None,
+                iam=float(row.iam)
+                if hasattr(row, "iam") and pd.notna(row.iam)
+                else None,
+            )
+        )
     return points
 
 
 def _build_response(
     result: dict,
-    location_id: Optional[int] = None,
+    location_id: int | None = None,
     technology: str = "mono_si",
     use_ai: bool = False,
 ) -> ForecastOut:
@@ -108,13 +124,14 @@ def run_forecast(req: ForecastRequest):
             denorm_factor=req.denorm_factor,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     out = _build_response(result, technology=req.technology, use_ai=req.use_ai)
 
     # Audit log (best-effort)
     try:
         from solar_forecast.db.manager import log_forecast_run
+
         log_forecast_run(
             location_id=None,
             horizon_hours=req.horizon_days * 24,
@@ -157,16 +174,18 @@ def get_location_forecast(location_id: int, horizon_days: int = Query(7, ge=1, l
             horizon_days=horizon_days,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    out = _build_response(result, location_id=location_id, technology=loc.get("technology", "mono_si"))
+    out = _build_response(
+        result, location_id=location_id, technology=loc.get("technology", "mono_si")
+    )
     payload_list = [h.model_dump() for h in out.hourly]
     db.save_forecast(location_id, today, payload_list, out.summary.model_dump())
     return out
 
 
 @router.get("/export/csv")
-def export_csv(location_id: int, date: Optional[str] = None):
+def export_csv(location_id: int, date: str | None = None):
     """Download a cached forecast as CSV."""
     loc = db.get_location(location_id)
     if not loc:
@@ -215,7 +234,7 @@ def get_realtime_forecast(req: RealtimeRequest):
             ghi_model_path=req.ghi_model_path,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     curve_df: pd.DataFrame = result["curve"]
     res_h = req.resolution_minutes / 60.0
@@ -229,8 +248,12 @@ def get_realtime_forecast(req: RealtimeRequest):
             power_kw=float(getattr(row, "power_kw", 0) or 0),
             energy_kwh=round(float(getattr(row, "power_kw", 0) or 0) * res_h, 6),
             kt=float(row.kt) if hasattr(row, "kt") and pd.notna(row.kt) else None,
-            t_cell_c=float(row.t_cell_c) if hasattr(row, "t_cell_c") and pd.notna(row.t_cell_c) else None,
-            cloud_cover_frac=float(row.cloud_cover_frac) if hasattr(row, "cloud_cover_frac") and pd.notna(row.cloud_cover_frac) else None,
+            t_cell_c=float(row.t_cell_c)
+            if hasattr(row, "t_cell_c") and pd.notna(row.t_cell_c)
+            else None,
+            cloud_cover_frac=float(row.cloud_cover_frac)
+            if hasattr(row, "cloud_cover_frac") and pd.notna(row.cloud_cover_frac)
+            else None,
         )
         for row in curve_df.itertuples()
     ]

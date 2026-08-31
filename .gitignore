@@ -16,6 +16,7 @@ venv/
 # Cache
 .openmeteo_cache*
 *.cache
+.ruff_cache/
 
 # Trained models — production models excluded; demo model included via git-lfs or directly
 # Uncomment to exclude model files from repo:

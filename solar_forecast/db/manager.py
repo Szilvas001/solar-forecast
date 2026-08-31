@@ -16,14 +16,15 @@ By default, the local SQLite DB is used.
 """
 
 from __future__ import annotations
+
 import json
 import logging
 import os
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Generator, Optional
 
 import pandas as pd
 
@@ -215,7 +216,8 @@ def create_tables() -> None:
 # Location helpers
 # ---------------------------------------------------------------------------
 
-def get_location(location_id: int) -> Optional[dict]:
+
+def get_location(location_id: int) -> dict | None:
     """Return a location row as dict, or None if not found."""
     try:
         with get_connection() as con:
@@ -240,11 +242,11 @@ def upsert_location(
     lon: float,
     altitude: float = 0.0,
     capacity_kw: float = 5.0,
-    tilt: Optional[float] = None,
-    azimuth: Optional[float] = None,
+    tilt: float | None = None,
+    azimuth: float | None = None,
     technology: str = "mono_si",
     timezone: str = "UTC",
-    config: Optional[dict] = None,
+    config: dict | None = None,
 ) -> int:
     """Insert or update a location; returns the row id."""
     config_json = json.dumps(config or {})
@@ -256,12 +258,25 @@ def upsert_location(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT DO NOTHING
             """,
-            (name, lat, lon, altitude, capacity_kw, tilt, azimuth, technology, timezone, config_json),
+            (
+                name,
+                lat,
+                lon,
+                altitude,
+                capacity_kw,
+                tilt,
+                azimuth,
+                technology,
+                timezone,
+                config_json,
+            ),
         )
         if cur.lastrowid and cur.lastrowid > 0:
             return cur.lastrowid
-        row = con.execute("SELECT id FROM locations WHERE name=? AND lat=? AND lon=?",
-                          (name, lat, lon)).fetchone()
+        row = con.execute(
+            "SELECT id FROM locations WHERE name=? AND lat=? AND lon=?",
+            (name, lat, lon),
+        ).fetchone()
         return row["id"] if row else -1
 
 
@@ -270,12 +285,24 @@ def upsert_location(
 # ---------------------------------------------------------------------------
 
 _CAMS_COLS = [
-    "aod_550", "aod_469", "aod_670", "aod_865",
-    "total_column_water_vapour", "total_column_ozone",
-    "pm25", "pm10",
-    "black_carbon_aod_550", "dust_aod_550", "organic_matter_aod_550",
-    "sea_salt_aod_550", "sulphate_aod_550", "nitrate_aod_550", "ammonium_aod_550",
-    "boundary_layer_height", "temperature_2m", "surface_pressure",
+    "aod_550",
+    "aod_469",
+    "aod_670",
+    "aod_865",
+    "total_column_water_vapour",
+    "total_column_ozone",
+    "pm25",
+    "pm10",
+    "black_carbon_aod_550",
+    "dust_aod_550",
+    "organic_matter_aod_550",
+    "sea_salt_aod_550",
+    "sulphate_aod_550",
+    "nitrate_aod_550",
+    "ammonium_aod_550",
+    "boundary_layer_height",
+    "temperature_2m",
+    "surface_pressure",
 ]
 
 
@@ -296,8 +323,8 @@ def upsert_cams(df: pd.DataFrame, location_id: int) -> int:
                     f"""
                     INSERT OR IGNORE INTO cams_atmospheric_forecast
                         (location_id, run_time_utc, valid_time_utc, forecast_step_hours,
-                         {', '.join(_CAMS_COLS)})
-                    VALUES (?, ?, ?, ?, {', '.join('?' * len(_CAMS_COLS))})
+                         {", ".join(_CAMS_COLS)})
+                    VALUES (?, ?, ?, ?, {", ".join("?" * len(_CAMS_COLS))})
                     """,
                     [location_id, run_t, valid_t, step] + vals,
                 )
@@ -309,8 +336,8 @@ def upsert_cams(df: pd.DataFrame, location_id: int) -> int:
 
 def query_cams(
     location_id: int,
-    start_utc: Optional[str] = None,
-    end_utc: Optional[str] = None,
+    start_utc: str | None = None,
+    end_utc: str | None = None,
 ) -> pd.DataFrame:
     """Return CAMS rows for a location (optionally filtered by valid_time_utc)."""
     try:
@@ -339,11 +366,22 @@ def query_cams(
 # ---------------------------------------------------------------------------
 
 _OM_COLS = [
-    "temperature_2m", "relative_humidity_2m", "dew_point_2m", "apparent_temperature",
-    "precipitation", "cloud_cover", "cloud_cover_low", "cloud_cover_mid",
-    "cloud_cover_high", "wind_speed_10m", "wind_direction_10m",
-    "shortwave_radiation", "direct_radiation", "diffuse_radiation",
-    "direct_normal_irradiance", "global_tilted_irradiance",
+    "temperature_2m",
+    "relative_humidity_2m",
+    "dew_point_2m",
+    "apparent_temperature",
+    "precipitation",
+    "cloud_cover",
+    "cloud_cover_low",
+    "cloud_cover_mid",
+    "cloud_cover_high",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "shortwave_radiation",
+    "direct_radiation",
+    "diffuse_radiation",
+    "direct_normal_irradiance",
+    "global_tilted_irradiance",
 ]
 
 
@@ -362,8 +400,8 @@ def upsert_openmeteo(df: pd.DataFrame, location_id: int) -> int:
                     f"""
                     INSERT OR IGNORE INTO openmeteo_forecast
                         (location_id, valid_time_utc,
-                         {', '.join(_OM_COLS)})
-                    VALUES (?, ?, {', '.join('?' * len(_OM_COLS))})
+                         {", ".join(_OM_COLS)})
+                    VALUES (?, ?, {", ".join("?" * len(_OM_COLS))})
                     """,
                     [location_id, valid_t] + vals,
                 )
@@ -375,8 +413,8 @@ def upsert_openmeteo(df: pd.DataFrame, location_id: int) -> int:
 
 def query_openmeteo(
     location_id: int,
-    start_utc: Optional[str] = None,
-    end_utc: Optional[str] = None,
+    start_utc: str | None = None,
+    end_utc: str | None = None,
 ) -> pd.DataFrame:
     """Return Open-Meteo rows for a location (optionally filtered)."""
     try:
@@ -402,6 +440,7 @@ def query_openmeteo(
 # Feature frame
 # ---------------------------------------------------------------------------
 
+
 def upsert_feature_frame(
     location_id: int,
     valid_time_utc: str,
@@ -424,15 +463,16 @@ def upsert_feature_frame(
 # Audit log helpers
 # ---------------------------------------------------------------------------
 
+
 def log_ingestion_run(
     source: str,
-    location_id: Optional[int] = None,
+    location_id: int | None = None,
     rows_inserted: int = 0,
     rows_skipped: int = 0,
     errors: int = 0,
     status: str = "ok",
-    detail: Optional[dict] = None,
-    started_at: Optional[str] = None,
+    detail: dict | None = None,
+    started_at: str | None = None,
 ) -> int:
     """Insert an ingestion_runs row; returns the new row id."""
     create_tables()
@@ -446,18 +486,27 @@ def log_ingestion_run(
                  rows_skipped, errors, status, detail_json)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (source, location_id, started, now, rows_inserted,
-             rows_skipped, errors, status, json.dumps(detail or {})),
+            (
+                source,
+                location_id,
+                started,
+                now,
+                rows_inserted,
+                rows_skipped,
+                errors,
+                status,
+                json.dumps(detail or {}),
+            ),
         )
         return cur.lastrowid or 0
 
 
 def log_forecast_run(
-    location_id: Optional[int],
-    horizon_hours: Optional[int],
+    location_id: int | None,
+    horizon_hours: int | None,
     data_tier: str,
-    confidence_pct: Optional[float],
-    summary: Optional[dict] = None,
+    confidence_pct: float | None,
+    summary: dict | None = None,
 ) -> int:
     create_tables()
     with get_connection() as con:
@@ -467,8 +516,13 @@ def log_forecast_run(
                 (location_id, horizon_hours, data_tier, confidence_pct, summary_json)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (location_id, horizon_hours, data_tier, confidence_pct,
-             json.dumps(summary or {})),
+            (
+                location_id,
+                horizon_hours,
+                data_tier,
+                confidence_pct,
+                json.dumps(summary or {}),
+            ),
         )
         return cur.lastrowid or 0
 
@@ -477,14 +531,15 @@ def log_forecast_run(
 # Model versions
 # ---------------------------------------------------------------------------
 
+
 def register_model_version(
     model_type: str,
     version: str,
     path: str,
-    r2: Optional[float] = None,
-    rmse: Optional[float] = None,
-    n_features: Optional[int] = None,
-    metadata: Optional[dict] = None,
+    r2: float | None = None,
+    rmse: float | None = None,
+    n_features: int | None = None,
+    metadata: dict | None = None,
 ) -> int:
     """Insert a model_versions row; returns the new row id."""
     create_tables()
@@ -495,13 +550,20 @@ def register_model_version(
                 (model_type, version, path, r2, rmse, n_features, metadata_json)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (model_type, version, path, r2, rmse, n_features,
-             json.dumps(metadata or {})),
+            (
+                model_type,
+                version,
+                path,
+                r2,
+                rmse,
+                n_features,
+                json.dumps(metadata or {}),
+            ),
         )
         return cur.lastrowid or 0
 
 
-def get_model_versions(model_type: Optional[str] = None) -> list[dict]:
+def get_model_versions(model_type: str | None = None) -> list[dict]:
     """Return all model version rows, newest first."""
     try:
         create_tables()

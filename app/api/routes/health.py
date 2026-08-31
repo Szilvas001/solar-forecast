@@ -1,11 +1,12 @@
 """Health check and system info endpoint."""
 
 from datetime import datetime, timezone
+
 from fastapi import APIRouter
 
 router = APIRouter()
 
-_VERSION = "2.1.0"
+_VERSION = "2.2.0"
 
 
 @router.get("/health", tags=["system"])

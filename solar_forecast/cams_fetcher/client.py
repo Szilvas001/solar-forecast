@@ -25,8 +25,7 @@ def get_client() -> Any:
         import cdsapi
     except ImportError as exc:
         raise ImportError(
-            "cdsapi is required for CAMS access. "
-            "Install with: pip install cdsapi"
+            "cdsapi is required for CAMS access. Install with: pip install cdsapi"
         ) from exc
 
     url = os.getenv("CADS_URL")

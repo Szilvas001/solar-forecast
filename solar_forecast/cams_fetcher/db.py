@@ -16,14 +16,14 @@ log = logging.getLogger(__name__)
 
 # Pandas dtype → PostgreSQL type
 _PG_TYPES = {
-    "int64":  "BIGINT",
-    "int32":  "INTEGER",
+    "int64": "BIGINT",
+    "int32": "INTEGER",
     "float64": "DOUBLE PRECISION",
     "float32": "REAL",
-    "bool":   "BOOLEAN",
+    "bool": "BOOLEAN",
     "object": "TEXT",
     "datetime64[ns, UTC]": "TIMESTAMPTZ",
-    "datetime64[ns]":      "TIMESTAMP",
+    "datetime64[ns]": "TIMESTAMP",
 }
 
 
@@ -32,6 +32,7 @@ def _import_psycopg2():
         import psycopg2
         import psycopg2.extras
         from psycopg2 import sql
+
         return psycopg2, sql
     except ImportError as exc:
         raise ImportError(
@@ -57,7 +58,7 @@ def get_connection() -> Any:
     port = int(os.getenv("DB_PORT") or os.getenv("PGPORT", "5432"))
     name = os.getenv("DB_NAME") or os.getenv("PGDATABASE", "cams")
     user = os.getenv("DB_USER") or os.getenv("PGUSER", "cams")
-    pw   = os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD", "")
+    pw = os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD", "")
 
     return psycopg2.connect(host=host, port=port, dbname=name, user=user, password=pw)
 
@@ -151,7 +152,9 @@ def insert_data(cur, table: str, df: pd.DataFrame, primary_key: list[str]) -> in
 
     records = [
         tuple(
-            v.isoformat() if isinstance(v, pd.Timestamp) else (None if pd.isna(v) else v)
+            v.isoformat()
+            if isinstance(v, pd.Timestamp)
+            else (None if pd.isna(v) else v)
             for v in row
         )
         for row in df.itertuples(index=False, name=None)
@@ -162,6 +165,7 @@ def insert_data(cur, table: str, df: pd.DataFrame, primary_key: list[str]) -> in
 
 
 # ── Read side: feed into the forecast pipeline ────────────────────────────
+
 
 def read_latest_forecast(
     cur,
@@ -178,7 +182,11 @@ def read_latest_forecast(
     if not _table_exists(cur, table):
         return pd.DataFrame()
 
-    target_iso = target_time.tz_convert("UTC").isoformat() if target_time.tzinfo else target_time.isoformat()
+    target_iso = (
+        target_time.tz_convert("UTC").isoformat()
+        if target_time.tzinfo
+        else target_time.isoformat()
+    )
     cur.execute(
         f"""
         SELECT *

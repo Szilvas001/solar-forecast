@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.models import LocationCreate, LocationOut, LocationUpdate, PaginatedLocations
+from app.api.models import (
+    LocationCreate,
+    LocationOut,
+    LocationUpdate,
+    PaginatedLocations,
+)
 from app.db import sqlite_manager as db
 
 router = APIRouter(prefix="/locations", tags=["locations"])
@@ -16,18 +19,18 @@ router = APIRouter(prefix="/locations", tags=["locations"])
 def list_locations(
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(50, ge=1, le=200, description="Items per page"),
-    search: Optional[str] = Query(None, description="Filter by name substring"),
+    search: str | None = Query(None, description="Filter by name substring"),
 ):
     """List all saved locations with optional pagination and name search."""
     all_locs: list = db.list_locations()
 
     if search:
         s = search.lower()
-        all_locs = [l for l in all_locs if s in l.get("name", "").lower()]
+        all_locs = [loc for loc in all_locs if s in loc.get("name", "").lower()]
 
     total = len(all_locs)
     start = (page - 1) * per_page
-    page_items = all_locs[start: start + per_page]
+    page_items = all_locs[start : start + per_page]
 
     return PaginatedLocations(
         total=total,
@@ -42,7 +45,7 @@ def create_location(payload: LocationCreate):
     try:
         return db.create_location(payload.model_dump())
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/{location_id}", response_model=LocationOut)

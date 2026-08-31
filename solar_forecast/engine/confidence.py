@@ -16,7 +16,6 @@ Confidence factors
 """
 
 from __future__ import annotations
-from typing import Optional
 
 
 def compute_confidence(
@@ -26,7 +25,7 @@ def compute_confidence(
     has_historical_model: bool = False,
     horizon_days: int = 7,
     technology: str = "mono_si",
-    sr_csv: Optional[str] = None,
+    sr_csv: str | None = None,
 ) -> dict:
     """Compute forecast confidence.
 
@@ -76,7 +75,9 @@ def compute_confidence(
         reasons.append("Custom spectral response curve applied")
 
     if technology not in ("mono_si", "poly_si"):
-        reasons.append(f"Non-standard technology ({technology}) — spectral mismatch computed")
+        reasons.append(
+            f"Non-standard technology ({technology}) — spectral mismatch computed"
+        )
 
     score = max(0, min(100, score))
 
@@ -90,7 +91,7 @@ def compute_confidence(
         label = "Low"
 
     return {
-        "confidence_pct":    score,
-        "confidence_label":  label,
+        "confidence_pct": score,
+        "confidence_label": label,
         "confidence_reasons": reasons,
     }

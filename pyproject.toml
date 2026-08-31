@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solar-forecast"
+version = "2.2.0"
+description = "Physics-based + AI hybrid PV production forecasting platform (SPECTRL2 clear-sky, Perez transposition, CAMS aerosol physics, XGBoost Kt correction)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Szilvas001" }]
+keywords = ["solar", "pv", "forecast", "photovoltaics", "weather", "xgboots", "streamlit", "fastapi"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "pandas>=2.0.0",
+    "pvlib>=0.10.5",
+    "xgboost>=2.0.0",
+    "scikit-learn>=1.3.0",
+    "joblib>=1.3.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "openmeteo-requests>=1.2.0",
+    "requests-cache>=1.1.0",
+    "retry-requests>=2.0.0",
+    "requests>=2.31.0",
+    "streamlit>=1.30.0",
+    "streamlit-autorefresh>=1.0.1",
+    "plotly>=5.18.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.0.0",
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0.0",
+    "click>=8.1.0",
+    "tqdm>=4.66.0",
+    "pytz>=2023.3",
+]
+
+[project.optional-dependencies]
+cams = [
+    "cdsapi>=0.7.0",
+    "xarray>=2023.6.0",
+    "netCDF4>=1.6.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+sf-download = "scripts.cli:download_cams"
+sf-train = "scripts.cli:train_kt_model"
+sf-dashboard = "scripts.cli:run_dashboard"
+sf-demo-model = "scripts.cli:generate_demo_model"
+
+[tool.setuptools.packages.find]
+include = ["solar_forecast*", "app*", "scripts*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+extend-exclude = [".ruff_cache", "docs", "demo-data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "solar_forecast", "scripts"]
+
+[tool.ruff.format]
+quote-style = "double"
