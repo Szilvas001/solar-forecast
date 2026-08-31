@@ -7,16 +7,16 @@ CLI
 """
 
 from __future__ import annotations
+
 import argparse
 import logging
 import sys
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import datetime, timezone
 
 import pandas as pd
 
-from .fetcher import fetch_cams_window
 from .client import is_cams_configured
+from .fetcher import fetch_cams_window
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ def _is_fresh(location_id: int, date_str: str, time_str: str) -> bool:
     """Return True if we already have recent CAMS data for this run."""
     try:
         from solar_forecast.db.manager import get_connection
+
         with get_connection() as conn:
             row = conn.execute(
                 "SELECT COUNT(*) FROM cams_atmospheric_forecast "
@@ -59,6 +60,7 @@ def _store(df: pd.DataFrame, location_id: int) -> int:
         return 0
     try:
         from solar_forecast.db.manager import upsert_cams
+
         return upsert_cams(df, location_id)
     except Exception as exc:
         log.error("DB insert failed: %s", exc)
@@ -69,8 +71,8 @@ def run_live(
     location_id: int,
     hours: int = 12,
     dry_run: bool = False,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
     force: bool = False,
 ) -> dict:
     """Fetch the latest CAMS forecast window for a location.
@@ -88,6 +90,7 @@ def run_live(
     if lat is None or lon is None:
         try:
             from solar_forecast.db.manager import get_location
+
             loc = get_location(location_id)
             if loc is None:
                 raise ValueError(f"Location {location_id} not found in DB")
@@ -98,19 +101,33 @@ def run_live(
     now_utc = datetime.now(timezone.utc)
     date_str, time_str = _latest_run_for_hour(now_utc.hour)
 
-    status = {"run_date": date_str, "run_time": time_str, "rows_stored": 0, "skipped": False, "error": None}
+    status = {
+        "run_date": date_str,
+        "run_time": time_str,
+        "rows_stored": 0,
+        "skipped": False,
+        "error": None,
+    }
 
     if not force and _is_fresh(location_id, date_str, time_str):
         log.info("CAMS data is fresh for %s %s — skipping", date_str, time_str)
         status["skipped"] = True
         return status
 
-    log.info("fetching live CAMS %s %s (horizon=%dh lat=%.3f lon=%.3f)",
-             date_str, time_str, hours, lat, lon)
+    log.info(
+        "fetching live CAMS %s %s (horizon=%dh lat=%.3f lon=%.3f)",
+        date_str,
+        time_str,
+        hours,
+        lat,
+        lon,
+    )
 
     df = fetch_cams_window(
-        lat=lat, lon=lon,
-        date_str=date_str, time_str=time_str,
+        lat=lat,
+        lon=lon,
+        date_str=date_str,
+        time_str=time_str,
         horizon_hours=hours,
         dry_run=dry_run,
     )
@@ -128,13 +145,16 @@ def run_live(
     if not dry_run:
         try:
             from solar_forecast.db.manager import log_ingestion_run
+
             log_ingestion_run(
                 source="cams_live",
                 location_id=location_id,
                 rows_inserted=status.get("rows_stored", 0),
                 rows_skipped=1 if status.get("skipped") else 0,
                 errors=1 if status.get("error") else 0,
-                status="skipped" if status.get("skipped") else ("error" if status.get("error") else "ok"),
+                status="skipped"
+                if status.get("skipped")
+                else ("error" if status.get("error") else "ok"),
                 detail={"run_date": date_str, "run_time": time_str, "hours": hours},
                 started_at=_started_at,
             )
@@ -152,10 +172,14 @@ def _cli():
     )
     p = argparse.ArgumentParser(description="CAMS live forecast ingestion")
     p.add_argument("--location-id", type=int, required=True, help="Location ID from DB")
-    p.add_argument("--hours", type=int, default=12, help="Forecast horizon hours (default 12)")
+    p.add_argument(
+        "--hours", type=int, default=12, help="Forecast horizon hours (default 12)"
+    )
     p.add_argument("--lat", type=float, default=None, help="Override latitude")
     p.add_argument("--lon", type=float, default=None, help="Override longitude")
-    p.add_argument("--force", action="store_true", help="Re-fetch even if data is fresh")
+    p.add_argument(
+        "--force", action="store_true", help="Re-fetch even if data is fresh"
+    )
     p.add_argument("--dry-run", action="store_true", help="Don't write to DB")
     args = p.parse_args()
 

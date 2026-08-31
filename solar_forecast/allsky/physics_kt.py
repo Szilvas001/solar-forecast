@@ -61,20 +61,20 @@ _AOD_BACKGROUND = 0.10
 
 # Defaults when CAMS SSA/GG not available
 _OMEGA_AER_DEFAULT = 0.92
-_G_AER_DEFAULT     = 0.65
+_G_AER_DEFAULT = 0.65
 
 
 def compute_physics_kt(
-    cloud_cover:          np.ndarray,
-    cloud_optical_depth:  np.ndarray,
-    cos_zenith:           np.ndarray,
-    airmass:              np.ndarray,
-    aod_550nm:            np.ndarray,
-    ghi_clear:            np.ndarray,
-    dni_clear:            np.ndarray,
-    dhi_clear:            np.ndarray,
-    ssa:                  np.ndarray | float = _OMEGA_AER_DEFAULT,
-    asymmetry:            np.ndarray | float = _G_AER_DEFAULT,
+    cloud_cover: np.ndarray,
+    cloud_optical_depth: np.ndarray,
+    cos_zenith: np.ndarray,
+    airmass: np.ndarray,
+    aod_550nm: np.ndarray,
+    ghi_clear: np.ndarray,
+    dni_clear: np.ndarray,
+    dhi_clear: np.ndarray,
+    ssa: np.ndarray | float = _OMEGA_AER_DEFAULT,
+    asymmetry: np.ndarray | float = _G_AER_DEFAULT,
 ) -> np.ndarray:
     """
     Compute the physics-based clearness index Kt.
@@ -94,7 +94,7 @@ def compute_physics_kt(
     -------
     kt : np.ndarray, values in [0, 1.05]; NaN for night/sub-horizon
     """
-    n    = len(cos_zenith)
+    n = len(cos_zenith)
     ghi_safe = np.where(ghi_clear > 0.5, ghi_clear, np.nan)
 
     # ── Diffuse/direct fraction under clear sky ───────────────────────────
@@ -102,31 +102,31 @@ def compute_physics_kt(
     R_n = np.clip(1.0 - R_d, 0.0, 1.0)
 
     # ── Cloud transmittance (Delta-Eddington) ─────────────────────────────
-    mu0       = np.clip(cos_zenith, 0.01, 1.0)
+    mu0 = np.clip(cos_zenith, 0.01, 1.0)
     tau_slant = cloud_optical_depth / mu0
 
-    T_direct  = np.exp(-tau_slant)
-    T_eff     = _OMEGA_C + (1.0 - _OMEGA_C) * T_direct   # direct + scattered
+    T_direct = np.exp(-tau_slant)
+    T_eff = _OMEGA_C + (1.0 - _OMEGA_C) * T_direct  # direct + scattered
 
     fc = np.clip(cloud_cover, 0.0, 1.0)
     Kt_cloud = (1.0 - fc) + fc * (R_d + R_n * T_eff)
 
     # ── Aerosol excess attenuation ────────────────────────────────────────
     ssa_arr = np.asarray(ssa, dtype=float)
-    g_arr   = np.asarray(asymmetry, dtype=float)
+    g_arr = np.asarray(asymmetry, dtype=float)
     if ssa_arr.ndim == 0:
         ssa_arr = np.full(n, float(ssa_arr))
     if g_arr.ndim == 0:
         g_arr = np.full(n, float(g_arr))
 
     ssa_arr = np.clip(ssa_arr, 0.50, 1.00)
-    g_arr   = np.clip(g_arr,   0.30, 0.90)
+    g_arr = np.clip(g_arr, 0.30, 0.90)
 
     delta_aod = np.maximum(0.0, aod_550nm - _AOD_BACKGROUND)
     # Extinction efficiency (single-scatter + forward scatter correction)
-    ext_eff   = 1.0 - ssa_arr * g_arr
-    am        = np.clip(airmass, 1.0, 38.0)
-    Kt_aer    = np.exp(-delta_aod * am * ext_eff)
+    ext_eff = 1.0 - ssa_arr * g_arr
+    am = np.clip(airmass, 1.0, 38.0)
+    Kt_aer = np.exp(-delta_aod * am * ext_eff)
 
     kt_raw = Kt_cloud * Kt_aer
 
@@ -156,7 +156,7 @@ def kt_to_allsky_ghi(kt: np.ndarray, ghi_clear: np.ndarray) -> np.ndarray:
 
 
 def decompose_allsky(
-    ghi_all:   np.ndarray,
+    ghi_all: np.ndarray,
     ghi_clear: np.ndarray,
     dni_clear: np.ndarray,
     dhi_clear: np.ndarray,
@@ -175,9 +175,9 @@ def decompose_allsky(
     """
     ghi_safe = np.where(ghi_clear > 0.5, ghi_clear, np.nan)
     with np.errstate(invalid="ignore", divide="ignore"):
-        kt_ratio = np.where(np.isfinite(ghi_safe),
-                            np.clip(ghi_all / ghi_safe, 0.0, 1.1),
-                            0.0)
+        kt_ratio = np.where(
+            np.isfinite(ghi_safe), np.clip(ghi_all / ghi_safe, 0.0, 1.1), 0.0
+        )
 
     # Scale clear-sky components by the ratio
     dni = np.clip(kt_ratio * dni_clear, 0.0, None)
@@ -190,7 +190,7 @@ def decompose_allsky(
     with np.errstate(invalid="ignore", divide="ignore"):
         norm = np.where(ghi_check > 0.5, ghi_all / ghi_check, 1.0)
     norm = np.clip(norm, 0.0, 2.0)
-    dni  = dni * norm
-    dhi  = dhi * norm
+    dni = dni * norm
+    dhi = dhi * norm
 
     return np.nan_to_num(dni, nan=0.0), np.nan_to_num(dhi, nan=0.0)

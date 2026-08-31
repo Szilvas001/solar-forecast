@@ -46,7 +46,6 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold, train_test_split
-from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 
 logger = logging.getLogger(__name__)
@@ -56,8 +55,8 @@ logger = logging.getLogger(__name__)
 # Core features (always computed)
 _FEATURES_CORE = [
     "cloud_cover",
-    "cloud_optical_depth_log",    # log1p(COD)
-    "log_aod",                    # log(AOD + 0.01)
+    "cloud_optical_depth_log",  # log1p(COD)
+    "log_aod",  # log(AOD + 0.01)
     "precipitable_water",
     "total_ozone_norm",
     "surface_pressure_norm",
@@ -72,14 +71,14 @@ _FEATURES_CORE = [
 
 # Extended features from new CAMS variables (used if available)
 _FEATURES_EXTENDED = [
-    "ssa_norm",                   # (SSA - 0.92) / 0.10
-    "asymmetry_norm",             # (g - 0.65) / 0.10
+    "ssa_norm",  # (SSA - 0.92) / 0.10
+    "asymmetry_norm",  # (g - 0.65) / 0.10
     "angstrom_alpha1_norm",
     "angstrom_alpha2_norm",
-    "pm25_log",                   # log(PM2.5 + 1)
-    "blh_norm",                   # BLH / 2000
-    "cloud_composite",            # 3-level weighted cloud cover
-    "cloud_low_frac",             # low cloud cover
+    "pm25_log",  # log(PM2.5 + 1)
+    "blh_norm",  # BLH / 2000
+    "cloud_composite",  # 3-level weighted cloud cover
+    "cloud_low_frac",  # low cloud cover
 ]
 
 # All features used during training (subset available at inference)
@@ -96,19 +95,27 @@ def _build_features(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame(index=df.index)
 
     # ── Core ─────────────────────────────────────────────────────────────
-    out["cloud_cover"]           = df.get("cloud_cover", pd.Series(0.0, index=df.index)).clip(0, 1)
+    out["cloud_cover"] = df.get("cloud_cover", pd.Series(0.0, index=df.index)).clip(
+        0, 1
+    )
     out["cloud_optical_depth_log"] = np.log1p(
         df.get("cloud_optical_depth", pd.Series(0.0, index=df.index)).clip(0, 200)
     )
     aod_raw = df.get("aod_550nm", pd.Series(0.10, index=df.index)).clip(0.005, 5.0)
-    out["log_aod"]               = np.log(aod_raw + 0.01)
-    out["precipitable_water"]    = df.get("precipitable_water", pd.Series(1.5, index=df.index)).clip(0, 10)
-    out["total_ozone_norm"]      = (df.get("total_ozone", pd.Series(310.0, index=df.index)) - 300.0) / 100.0
+    out["log_aod"] = np.log(aod_raw + 0.01)
+    out["precipitable_water"] = df.get(
+        "precipitable_water", pd.Series(1.5, index=df.index)
+    ).clip(0, 10)
+    out["total_ozone_norm"] = (
+        df.get("total_ozone", pd.Series(310.0, index=df.index)) - 300.0
+    ) / 100.0
     out["surface_pressure_norm"] = (
         df.get("surface_pressure", pd.Series(1013.25, index=df.index)) - 1013.25
     ) / 50.0
-    out["cos_zenith"]            = df.get("cos_zenith", pd.Series(0.5, index=df.index)).clip(0, 1)
-    out["log_airmass"]           = np.log(df.get("airmass", pd.Series(2.0, index=df.index)).clip(1, 40))
+    out["cos_zenith"] = df.get("cos_zenith", pd.Series(0.5, index=df.index)).clip(0, 1)
+    out["log_airmass"] = np.log(
+        df.get("airmass", pd.Series(2.0, index=df.index)).clip(1, 40)
+    )
 
     hour_frac = df.index.hour + df.index.minute / 60.0
     out["hour_sin"] = np.sin(2 * np.pi * hour_frac / 24.0)
@@ -124,19 +131,30 @@ def _build_features(df: pd.DataFrame) -> pd.DataFrame:
         df.get("ssa_550nm", pd.Series(0.92, index=df.index)).clip(0.5, 1.0) - 0.92
     ) / 0.10
     out["asymmetry_norm"] = (
-        df.get("asymmetry_factor", pd.Series(0.65, index=df.index)).clip(0.3, 0.9) - 0.65
+        df.get("asymmetry_factor", pd.Series(0.65, index=df.index)).clip(0.3, 0.9)
+        - 0.65
     ) / 0.10
     out["angstrom_alpha1_norm"] = (
-        df.get("angstrom_alpha1", df.get("angstrom_exponent", pd.Series(1.30, index=df.index))).clip(0, 3) - 1.30
+        df.get(
+            "angstrom_alpha1",
+            df.get("angstrom_exponent", pd.Series(1.30, index=df.index)),
+        ).clip(0, 3)
+        - 1.30
     ) / 0.50
     out["angstrom_alpha2_norm"] = (
-        df.get("angstrom_alpha2", df.get("angstrom_exponent", pd.Series(1.30, index=df.index))).clip(0, 3) - 1.30
+        df.get(
+            "angstrom_alpha2",
+            df.get("angstrom_exponent", pd.Series(1.30, index=df.index)),
+        ).clip(0, 3)
+        - 1.30
     ) / 0.50
 
     pm25 = df.get("pm25", pd.Series(10.0, index=df.index)).clip(0, 500)
     out["pm25_log"] = np.log1p(pm25)
 
-    blh = df.get("boundary_layer_height", pd.Series(1000.0, index=df.index)).clip(10, 5000)
+    blh = df.get("boundary_layer_height", pd.Series(1000.0, index=df.index)).clip(
+        10, 5000
+    )
     out["blh_norm"] = blh / 2000.0
 
     # Composite cloud cover (best available)
@@ -148,7 +166,7 @@ def _build_features(df: pd.DataFrame) -> pd.DataFrame:
     if "cloud_cover_low" in df.columns:
         out["cloud_low_frac"] = (df["cloud_cover_low"] / 100.0).clip(0, 1)
     else:
-        out["cloud_low_frac"] = out["cloud_cover"] * 0.5   # rough estimate
+        out["cloud_low_frac"] = out["cloud_cover"] * 0.5  # rough estimate
 
     return out[_FEATURE_COLS]
 
@@ -161,7 +179,7 @@ class KtTrainer:
     """
 
     def __init__(self, cfg: dict):
-        self.cfg        = cfg
+        self.cfg = cfg
         self.model_path = Path(cfg["model"]["kt_model_path"])
         self.min_samples = cfg["model"].get("min_train_samples", 500)
         self.pipeline: dict | None = None
@@ -172,9 +190,9 @@ class KtTrainer:
 
     def build_training_set(
         self,
-        df_atmo:      pd.DataFrame,
+        df_atmo: pd.DataFrame,
         df_radiation: pd.DataFrame,
-        df_clearsky:  pd.DataFrame,
+        df_clearsky: pd.DataFrame,
     ) -> pd.DataFrame:
         """
         Merge atmospheric features, clear-sky reference, and CAMS radiation.
@@ -183,9 +201,9 @@ class KtTrainer:
 
         Returns a training-ready DataFrame with `Kt_target` column.
         """
-        idx = (df_atmo.index
-               .intersection(df_radiation.index)
-               .intersection(df_clearsky.index))
+        idx = df_atmo.index.intersection(df_radiation.index).intersection(
+            df_clearsky.index
+        )
         if len(idx) == 0:
             raise ValueError("No overlapping timestamps in training data.")
 
@@ -195,7 +213,7 @@ class KtTrainer:
                 df[col] = df_clearsky.loc[idx, col].values
 
         df["ghi_obs"] = df_radiation.loc[idx, "ghi"].values
-        df["ghi_cs"]  = df_radiation.loc[idx, "ghi_clear"].values   # CAMS McClear
+        df["ghi_cs"] = df_radiation.loc[idx, "ghi_clear"].values  # CAMS McClear
 
         # Target Kt (from CAMS radiation service — high quality clear-sky ref)
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -207,20 +225,27 @@ class KtTrainer:
 
         # Physics Kt as feature
         from .physics_kt import compute_physics_kt, estimate_cod_from_cover
-        cod = df.get("cloud_optical_depth",
-                     pd.Series(estimate_cod_from_cover(df["cloud_cover"].fillna(0).values),
-                               index=df.index))
+
+        cod = df.get(
+            "cloud_optical_depth",
+            pd.Series(
+                estimate_cod_from_cover(df["cloud_cover"].fillna(0).values),
+                index=df.index,
+            ),
+        )
         df["Kt_phys"] = compute_physics_kt(
-            cloud_cover        =df["cloud_cover"].fillna(0).values,
+            cloud_cover=df["cloud_cover"].fillna(0).values,
             cloud_optical_depth=cod.values,
-            cos_zenith         =df["cos_zenith"].values,
-            airmass            =df["airmass"].values,
-            aod_550nm          =df.get("aod_550nm", pd.Series(0.1, index=df.index)).values,
-            ghi_clear          =df["ghi_clear"].values,
-            dni_clear          =df["dni_clear"].values,
-            dhi_clear          =df["dhi_clear"].values,
-            ssa                =df.get("ssa_550nm", pd.Series(0.92, index=df.index)).values,
-            asymmetry          =df.get("asymmetry_factor", pd.Series(0.65, index=df.index)).values,
+            cos_zenith=df["cos_zenith"].values,
+            airmass=df["airmass"].values,
+            aod_550nm=df.get("aod_550nm", pd.Series(0.1, index=df.index)).values,
+            ghi_clear=df["ghi_clear"].values,
+            dni_clear=df["dni_clear"].values,
+            dhi_clear=df["dhi_clear"].values,
+            ssa=df.get("ssa_550nm", pd.Series(0.92, index=df.index)).values,
+            asymmetry=df.get(
+                "asymmetry_factor", pd.Series(0.65, index=df.index)
+            ).values,
         )
 
         # Drop night and NaN rows
@@ -266,44 +291,48 @@ class KtTrainer:
         )
 
         xgb_model = xgb.XGBRegressor(
-            n_estimators         =800,
-            learning_rate        =0.03,
-            max_depth            =6,
-            subsample            =0.80,
-            colsample_bytree     =0.80,
-            colsample_bylevel    =0.80,
-            min_child_weight     =5,
-            reg_alpha            =0.1,
-            reg_lambda           =1.5,
-            gamma                =0.05,
-            objective            ="reg:squarederror",   # RMSE minimisation
-            tree_method          ="hist",
-            random_state         =42,
-            n_jobs               =-1,
-            eval_metric          ="rmse",
+            n_estimators=800,
+            learning_rate=0.03,
+            max_depth=6,
+            subsample=0.80,
+            colsample_bytree=0.80,
+            colsample_bylevel=0.80,
+            min_child_weight=5,
+            reg_alpha=0.1,
+            reg_lambda=1.5,
+            gamma=0.05,
+            objective="reg:squarederror",  # RMSE minimisation
+            tree_method="hist",
+            random_state=42,
+            n_jobs=-1,
+            eval_metric="rmse",
             early_stopping_rounds=50,
         )
 
-        scaler     = RobustScaler()
-        X_train_s  = scaler.fit_transform(X_train)
-        X_val_s    = scaler.transform(X_val)
+        scaler = RobustScaler()
+        X_train_s = scaler.fit_transform(X_train)
+        X_val_s = scaler.transform(X_val)
 
         xgb_model.fit(
-            X_train_s, y_train,
+            X_train_s,
+            y_train,
             eval_set=[(X_val_s, y_val)],
             verbose=False,
         )
 
-        self.pipeline = {"scaler": scaler, "model": xgb_model,
-                         "feature_cols": _FEATURE_COLS}
+        self.pipeline = {
+            "scaler": scaler,
+            "model": xgb_model,
+            "feature_cols": _FEATURE_COLS,
+        }
 
         y_pred = xgb_model.predict(X_val_s)
         metrics = {
-            "n_train":      len(X_train),
-            "n_val":        len(X_val),
-            "mae":          float(mean_absolute_error(y_val, y_pred)),
-            "rmse":         float(np.sqrt(mean_squared_error(y_val, y_pred))),
-            "r2":           float(r2_score(y_val, y_pred)),
+            "n_train": len(X_train),
+            "n_val": len(X_val),
+            "mae": float(mean_absolute_error(y_val, y_pred)),
+            "rmse": float(np.sqrt(mean_squared_error(y_val, y_pred))),
+            "r2": float(r2_score(y_val, y_pred)),
             "best_iteration": int(xgb_model.best_iteration),
         }
 
@@ -314,7 +343,10 @@ class KtTrainer:
 
         logger.info(
             "Kt model: MAE=%.4f  RMSE=%.4f  R²=%.4f  iters=%d",
-            metrics["mae"], metrics["rmse"], metrics["r2"], metrics["best_iteration"]
+            metrics["mae"],
+            metrics["rmse"],
+            metrics["r2"],
+            metrics["best_iteration"],
         )
         self._last_metrics = metrics
         return metrics
@@ -338,9 +370,13 @@ class KtTrainer:
             X_val_s = s.transform(X[val_idx])
 
             m = xgb.XGBRegressor(
-                n_estimators=400, learning_rate=0.05, max_depth=5,
-                objective="reg:squarederror", tree_method="hist",
-                n_jobs=-1, random_state=42,
+                n_estimators=400,
+                learning_rate=0.05,
+                max_depth=5,
+                objective="reg:squarederror",
+                tree_method="hist",
+                n_jobs=-1,
+                random_state=42,
             )
             m.fit(X_tr_s, y[tr_idx], verbose=False)
             y_pred = m.predict(X_val_s)
@@ -349,8 +385,8 @@ class KtTrainer:
 
         return {
             f"cv_{k}fold_rmse_mean": float(np.mean(rmse_list)),
-            f"cv_{k}fold_rmse_std":  float(np.std(rmse_list)),
-            f"cv_{k}fold_r2_mean":   float(np.mean(r2_list)),
+            f"cv_{k}fold_rmse_std": float(np.std(rmse_list)),
+            f"cv_{k}fold_r2_mean": float(np.mean(r2_list)),
         }
 
     # ──────────────────────────────────────────────────────────────────────
@@ -403,10 +439,11 @@ class KtTrainer:
         logger.info("Kt model saved to %s", path)
         try:
             from solar_forecast.db.manager import register_model_version
+
             m = getattr(self, "_last_metrics", {})
             register_model_version(
                 model_type="kt_xgb",
-                version="2.1.0",
+                version="2.2.0",
                 path=str(path),
                 r2=m.get("r2"),
                 rmse=m.get("rmse"),

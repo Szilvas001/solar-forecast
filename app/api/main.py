@@ -1,5 +1,5 @@
 """
-Solar Forecast Pro — FastAPI backend v2.1.0
+Solar Forecast Pro — FastAPI backend v2.2.0
 
 Start:
     uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -12,7 +12,7 @@ Docs:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health, locations, forecast, ingestion, features
+from app.api.routes import features, forecast, health, ingestion, locations
 from app.api.routes import model as model_routes
 from app.db.sqlite_manager import create_tables, seed_demo_location
 
@@ -23,10 +23,13 @@ app = FastAPI(
         "SPECTRL2 clear-sky · Perez transposition · CAMS atmospheric data · "
         "XGBoost Kt correction · SR/IAM/denorm spectral integration."
     ),
-    version="2.1.0",
+    version="2.2.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    contact={"name": "Solar Forecast Pro", "url": "https://github.com/Szilvas001/project"},
+    contact={
+        "name": "Solar Forecast Pro",
+        "url": "https://github.com/Szilvas001/project",
+    },
     license_info={"name": "Proprietary"},
 )
 
@@ -53,6 +56,7 @@ def startup():
     # Ensure new SF DB tables are created too
     try:
         from solar_forecast.db.manager import create_tables as sf_create
+
         sf_create()
     except Exception:
         pass

@@ -59,7 +59,11 @@ def find_missing_forecasts(
     missing = [(d, h) for d, h in all_expected if (d, h) not in existing]
 
     if missing:
-        log.info("[%s] %d missing run(s); processing up to %d",
-                 dataset_config["name"], len(missing), max_per_run)
+        log.info(
+            "[%s] %d missing run(s); processing up to %d",
+            dataset_config["name"],
+            len(missing),
+            max_per_run,
+        )
 
     return missing[:max_per_run]

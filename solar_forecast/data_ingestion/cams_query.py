@@ -27,7 +27,6 @@ Returned columns (where available)
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -36,21 +35,21 @@ log = logging.getLogger(__name__)
 
 # Map raw CAMS variable names → pipeline-friendly column names
 _RENAME = {
-    "total_column_ozone":                       "ozone_atm_cm",
-    "total_column_water_vapour":                "water_vapour_kg_m2",
-    "total_aerosol_optical_depth_550nm":        "aod_550nm",
-    "total_aerosol_optical_depth_469nm":        "aod_469nm",
-    "total_aerosol_optical_depth_670nm":        "aod_670nm",
-    "total_aerosol_optical_depth_865nm":        "aod_865nm",
-    "total_aerosol_optical_depth_1240nm":       "aod_1240nm",
-    "boundary_layer_height":                    "boundary_layer_height_m",
-    "2m_temperature":                           "temp_2m_k",
-    "surface_pressure":                         "surface_pressure_pa",
-    "dust_aerosol_optical_depth_550nm":         "aod_dust_550nm",
+    "total_column_ozone": "ozone_atm_cm",
+    "total_column_water_vapour": "water_vapour_kg_m2",
+    "total_aerosol_optical_depth_550nm": "aod_550nm",
+    "total_aerosol_optical_depth_469nm": "aod_469nm",
+    "total_aerosol_optical_depth_670nm": "aod_670nm",
+    "total_aerosol_optical_depth_865nm": "aod_865nm",
+    "total_aerosol_optical_depth_1240nm": "aod_1240nm",
+    "boundary_layer_height": "boundary_layer_height_m",
+    "2m_temperature": "temp_2m_k",
+    "surface_pressure": "surface_pressure_pa",
+    "dust_aerosol_optical_depth_550nm": "aod_dust_550nm",
     "black_carbon_aerosol_optical_depth_550nm": "aod_bc_550nm",
     "organic_matter_aerosol_optical_depth_550nm": "aod_om_550nm",
-    "sea_salt_aerosol_optical_depth_550nm":     "aod_ss_550nm",
-    "sulphate_aerosol_optical_depth_550nm":     "aod_so4_550nm",
+    "sea_salt_aerosol_optical_depth_550nm": "aod_ss_550nm",
+    "sulphate_aerosol_optical_depth_550nm": "aod_so4_550nm",
 }
 
 
@@ -113,7 +112,9 @@ def load_cams_atmospheric_state(
         cur = conn.cursor()
         for tbl in tables:
             try:
-                df = cams_db.read_latest_forecast(cur, tbl, target, horizon_hours=len(times))
+                df = cams_db.read_latest_forecast(
+                    cur, tbl, target, horizon_hours=len(times)
+                )
             except Exception as exc:
                 log.debug("read %s failed: %s", tbl, exc)
                 continue
@@ -121,8 +122,9 @@ def load_cams_atmospheric_state(
                 continue
             df = df.rename(columns=_RENAME)
             if "reference_time" in df and "forecast_hours" in df:
-                df["valid_time"] = pd.to_datetime(df["reference_time"], utc=True) \
-                    + pd.to_timedelta(df["forecast_hours"], unit="h")
+                df["valid_time"] = pd.to_datetime(
+                    df["reference_time"], utc=True
+                ) + pd.to_timedelta(df["forecast_hours"], unit="h")
                 df = df.set_index("valid_time")
             frames.append(df)
         cur.close()
@@ -141,17 +143,22 @@ def load_cams_atmospheric_state(
     merged = _to_pipeline_units(merged)
 
     # Resample / interpolate to the requested hourly grid
-    out = merged.reindex(times.union(merged.index)).interpolate(method="time").reindex(times)
+    out = (
+        merged.reindex(times.union(merged.index))
+        .interpolate(method="time")
+        .reindex(times)
+    )
     return out
 
 
-def angstrom_alpha(aod_short: pd.Series, aod_long: pd.Series,
-                   wl_short: float, wl_long: float) -> pd.Series:
+def angstrom_alpha(
+    aod_short: pd.Series, aod_long: pd.Series, wl_short: float, wl_long: float
+) -> pd.Series:
     """Ångström exponent α between two AOD wavelengths."""
     eps = 1e-9
-    s = aod_short.clip(lower=eps).astype(float)
-    l = aod_long.clip(lower=eps).astype(float)
-    return -np.log(s / l) / np.log(wl_short / wl_long)
+    short = aod_short.clip(lower=eps).astype(float)
+    long = aod_long.clip(lower=eps).astype(float)
+    return -np.log(short / long) / np.log(wl_short / wl_long)
 
 
 def derive_extras(df: pd.DataFrame) -> pd.DataFrame:
@@ -169,20 +176,37 @@ def derive_extras(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 
     if {"aod_469nm", "aod_865nm"}.issubset(out.columns):
-        out["angstrom_alpha1"] = angstrom_alpha(out["aod_469nm"], out["aod_865nm"], 469, 865)
+        out["angstrom_alpha1"] = angstrom_alpha(
+            out["aod_469nm"], out["aod_865nm"], 469, 865
+        )
     if {"aod_670nm", "aod_1240nm"}.issubset(out.columns):
-        out["angstrom_alpha2"] = angstrom_alpha(out["aod_670nm"], out["aod_1240nm"], 670, 1240)
+        out["angstrom_alpha2"] = angstrom_alpha(
+            out["aod_670nm"], out["aod_1240nm"], 670, 1240
+        )
 
-    species_cols = ["aod_dust_550nm", "aod_bc_550nm", "aod_om_550nm",
-                    "aod_ss_550nm", "aod_so4_550nm"]
+    species_cols = [
+        "aod_dust_550nm",
+        "aod_bc_550nm",
+        "aod_om_550nm",
+        "aod_ss_550nm",
+        "aod_so4_550nm",
+    ]
     if all(c in out.columns for c in species_cols):
         # Tabulated SSA (550 nm) and asymmetry parameters per species
-        ssa  = {"dust": 0.92, "bc": 0.20, "om": 0.95, "ss": 0.99, "so4": 0.98}
+        ssa = {"dust": 0.92, "bc": 0.20, "om": 0.95, "ss": 0.99, "so4": 0.98}
         asym = {"dust": 0.72, "bc": 0.55, "om": 0.66, "ss": 0.78, "so4": 0.70}
-        species_map = {"dust": "aod_dust_550nm", "bc": "aod_bc_550nm",
-                       "om": "aod_om_550nm",   "ss": "aod_ss_550nm",
-                       "so4": "aod_so4_550nm"}
+        species_map = {
+            "dust": "aod_dust_550nm",
+            "bc": "aod_bc_550nm",
+            "om": "aod_om_550nm",
+            "ss": "aod_ss_550nm",
+            "so4": "aod_so4_550nm",
+        }
         total = sum(out[col] for col in species_map.values()).replace(0, np.nan)
-        out["ssa_mix"]  = sum(out[col] * ssa[k] for k, col in species_map.items()) / total
-        out["asym_mix"] = sum(out[col] * asym[k] for k, col in species_map.items()) / total
+        out["ssa_mix"] = (
+            sum(out[col] * ssa[k] for k, col in species_map.items()) / total
+        )
+        out["asym_mix"] = (
+            sum(out[col] * asym[k] for k, col in species_map.items()) / total
+        )
     return out

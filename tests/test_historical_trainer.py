@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 
 from solar_forecast.allsky.historical_trainer import (
-    AccuracyTargetNotMet,
     HistoricalGHITrainer,
     TrainingResult,
     build_features,
@@ -18,6 +17,7 @@ def _make_trainer():
 
 
 # ── synthesize_training_data ──────────────────────────────────────────────
+
 
 def test_synthesize_returns_dataframe():
     df = synthesize_training_data(n_days=10)
@@ -32,6 +32,7 @@ def test_synthesize_ghi_obs_non_negative():
 
 
 # ── build_features ────────────────────────────────────────────────────────
+
 
 def test_build_features_adds_cyclic_columns():
     df = synthesize_training_data(n_days=3)
@@ -48,6 +49,7 @@ def test_build_features_missing_ghi_clear_raises():
 
 # ── HistoricalGHITrainer.train_and_validate ───────────────────────────────
 
+
 def test_accuracy_contract_met():
     """Core contract: R² ≥ 0.75 and RMSE_rel ≤ 0.10 on synthetic data."""
     df = synthesize_training_data(n_days=90, seed=42)
@@ -55,7 +57,9 @@ def test_accuracy_contract_met():
     result = trainer.train_and_validate(df, val_fraction=0.25, enforce=True)
     assert isinstance(result, TrainingResult)
     assert result.r2 >= 0.75, f"R² too low: {result.r2:.3f}"
-    assert result.rmse_relative <= 0.10, f"RMSE_rel too high: {result.rmse_relative:.3f}"
+    assert result.rmse_relative <= 0.10, (
+        f"RMSE_rel too high: {result.rmse_relative:.3f}"
+    )
 
 
 def test_accuracy_result_fields():
@@ -77,6 +81,7 @@ def test_enforce_false_doesnt_raise_on_small_data():
 
 
 # ── predict ───────────────────────────────────────────────────────────────
+
 
 def test_predict_shape_matches_input():
     df = synthesize_training_data(n_days=14, seed=7)
@@ -102,6 +107,7 @@ def test_predict_before_fit_raises():
 
 
 # ── save / load ───────────────────────────────────────────────────────────
+
 
 def test_save_load_roundtrip(tmp_path):
     df = synthesize_training_data(n_days=20, seed=5)

@@ -19,7 +19,15 @@ def test_demo_pipeline_imports():
 
 def test_sqlite_manager_imports():
     mod = importlib.import_module("app.db.sqlite_manager")
-    for fn in ("create_tables", "list_locations", "create_location",
-               "get_location", "update_location", "delete_location",
-               "save_forecast", "load_forecast", "seed_demo_location"):
+    for fn in (
+        "create_tables",
+        "list_locations",
+        "create_location",
+        "get_location",
+        "update_location",
+        "delete_location",
+        "save_forecast",
+        "load_forecast",
+        "seed_demo_location",
+    ):
         assert hasattr(mod, fn)

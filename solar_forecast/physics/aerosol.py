@@ -24,39 +24,40 @@ import numpy as np
 # γ exponent from Hänel (1976) Table 2 (continental and maritime aerosols)
 # k_rh = hygroscopic amplification constant (AOD scaling)
 _HANEL_GAMMA = {
-    "continental": 0.37,   # clean continental
-    "maritime":    0.48,   # marine boundary layer
-    "urban":       0.44,   # urban/polluted
-    "default":     0.40,
+    "continental": 0.37,  # clean continental
+    "maritime": 0.48,  # marine boundary layer
+    "urban": 0.44,  # urban/polluted
+    "default": 0.40,
 }
 
 # Aerosol type refractive indices at 550 nm (real, imaginary)
 # Used for simplified SSA/GG estimation when CAMS SSA is unavailable
 _REFRACTIVE_INDEX = {
     # (m_real, m_imag) at 550 nm
-    "dust":    (1.53, 0.006),
-    "bc":      (1.75, 0.44),   # black carbon
-    "oc":      (1.45, 0.005),  # organic carbon
+    "dust": (1.53, 0.006),
+    "bc": (1.75, 0.44),  # black carbon
+    "oc": (1.45, 0.005),  # organic carbon
     "sea_salt": (1.50, 1e-8),
     "sulphate": (1.43, 1e-8),
 }
 
 # Typical SSA and asymmetry g per aerosol species (550 nm)
 _SPECIES_SSA = {
-    "dust":     (0.93, 0.73),
-    "bc":       (0.30, 0.45),
-    "oc":       (0.92, 0.65),
+    "dust": (0.93, 0.73),
+    "bc": (0.30, 0.45),
+    "oc": (0.92, 0.65),
     "sea_salt": (0.999, 0.72),
     "sulphate": (0.999, 0.64),
 }
 
 # ── AM1.5G ETR solar constant (W/m²) at TOA ───────────────────────────────
-_E0 = 1361.0   # Solar constant (W/m²)
+_E0 = 1361.0  # Solar constant (W/m²)
 
 
 # ══════════════════════════════════════════════════════════════════════════
 # Ångström formula
 # ══════════════════════════════════════════════════════════════════════════
+
 
 def angstrom_aod(
     tau_ref: float | np.ndarray,
@@ -133,10 +134,14 @@ def compute_alpha1_alpha2(
     -------
     (alpha1, alpha2, tau550_best)
     """
+
     def safe(v, default=np.nan):
         if v is None:
-            return np.full_like(tau550 or np.array([np.nan]), np.nan) \
-                   if hasattr(tau550, '__len__') else np.nan
+            return (
+                np.full_like(tau550 or np.array([np.nan]), np.nan)
+                if hasattr(tau550, "__len__")
+                else np.nan
+            )
         v = np.asarray(v, dtype=float)
         v = np.where(v > 0, v, np.nan)
         return v
@@ -154,7 +159,7 @@ def compute_alpha1_alpha2(
     elif not _all_nan(t500) and not _all_nan(t550):
         alpha1 = angstrom_exponent(t500, 500.0, t550, 550.0)
     else:
-        alpha1 = np.full_like(t550, 1.30) if hasattr(t550, '__len__') else 1.30
+        alpha1 = np.full_like(t550, 1.30) if hasattr(t550, "__len__") else 1.30
 
     # ALPHA2: 500→1064 nm (coarse mode, visible-NIR)
     if not _all_nan(t500) and not _all_nan(t1020):
@@ -164,7 +169,7 @@ def compute_alpha1_alpha2(
     elif not _all_nan(t670) and not _all_nan(t865):
         alpha2 = angstrom_exponent(t670, 670.0, t865, 865.0)
     else:
-        alpha2 = np.full_like(t550, 1.30) if hasattr(t550, '__len__') else 1.30
+        alpha2 = np.full_like(t550, 1.30) if hasattr(t550, "__len__") else 1.30
 
     # Best TAU550
     if not _all_nan(t550):
@@ -174,7 +179,7 @@ def compute_alpha1_alpha2(
     elif not _all_nan(t670) and not _all_nan(alpha2):
         tau_best = angstrom_aod(t670, 670.0, 550.0, alpha2)
     else:
-        tau_best = np.full_like(alpha1, 0.10) if hasattr(alpha1, '__len__') else 0.10
+        tau_best = np.full_like(alpha1, 0.10) if hasattr(alpha1, "__len__") else 0.10
 
     alpha1 = np.clip(np.nan_to_num(alpha1, nan=1.30), 0.0, 3.0)
     alpha2 = np.clip(np.nan_to_num(alpha2, nan=1.30), 0.0, 3.0)
@@ -193,6 +198,7 @@ def _all_nan(v) -> bool:
 # ══════════════════════════════════════════════════════════════════════════
 # Hänel hygroscopic growth factor
 # ══════════════════════════════════════════════════════════════════════════
+
 
 def hanel_growth_factor(
     rh: float | np.ndarray,
@@ -227,7 +233,7 @@ def hanel_growth_factor(
     rh = np.clip(np.asarray(rh, dtype=float), 0.0, rh_delhyg - 0.001)
     rh_ref_val = min(rh_ref, rh_delhyg - 0.001)
 
-    numerator   = 1.0 - rh / rh_delhyg
+    numerator = 1.0 - rh / rh_delhyg
     denominator = 1.0 - rh_ref_val / rh_delhyg
 
     # Avoid divide-by-zero
@@ -267,6 +273,7 @@ def hanel_corrected_aod(
 # SSA and asymmetry parameter estimation
 # ══════════════════════════════════════════════════════════════════════════
 
+
 def estimate_ssa_g_from_species(
     aod_dust: float,
     aod_bc: float,
@@ -291,16 +298,16 @@ def estimate_ssa_g_from_species(
     (ssa, g) — bulk SSA and asymmetry parameter, clipped to physical range
     """
     species = {
-        "dust":      (aod_dust,     *_SPECIES_SSA["dust"]),
-        "bc":        (aod_bc,       *_SPECIES_SSA["bc"]),
-        "oc":        (aod_oc,       *_SPECIES_SSA["oc"]),
-        "sea_salt":  (aod_sea_salt, *_SPECIES_SSA["sea_salt"]),
-        "sulphate":  (aod_sulphate, *_SPECIES_SSA["sulphate"]),
+        "dust": (aod_dust, *_SPECIES_SSA["dust"]),
+        "bc": (aod_bc, *_SPECIES_SSA["bc"]),
+        "oc": (aod_oc, *_SPECIES_SSA["oc"]),
+        "sea_salt": (aod_sea_salt, *_SPECIES_SSA["sea_salt"]),
+        "sulphate": (aod_sulphate, *_SPECIES_SSA["sulphate"]),
     }
 
     total_aod = sum(max(0, v[0]) for v in species.values())
     if total_aod < 1e-6:
-        return 0.92, 0.65   # continental background defaults
+        return 0.92, 0.65  # continental background defaults
 
     ssa_sum = 0.0
     g_weight = 0.0
@@ -360,6 +367,7 @@ def estimate_ssa_g_from_pm(
 # ══════════════════════════════════════════════════════════════════════════
 # Extraterrestrial irradiance / solar constant
 # ══════════════════════════════════════════════════════════════════════════
+
 
 def extraterrestrial_irradiance(dayofyear: int | np.ndarray) -> float | np.ndarray:
     """

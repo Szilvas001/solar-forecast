@@ -1,12 +1,10 @@
 """Core CAMS fetch → parse → store pipeline."""
 
 from __future__ import annotations
+
 import logging
 import os
 import tempfile
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -22,18 +20,18 @@ _VARIABLES = CAMS_LONG_NAMES
 
 
 def _leadtime_range(hours: int) -> list[str]:
-    return [str(h) for h in range(0, hours + 1)]
+    return [str(h) for h in range(hours + 1)]
 
 
 def fetch_cams_window(
     lat: float,
     lon: float,
-    date_str: str,          # YYYY-MM-DD
+    date_str: str,  # YYYY-MM-DD
     time_str: str = "00:00",
     horizon_hours: int = 12,
     area_margin: float = 0.5,
     dry_run: bool = False,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Download one CAMS forecast window and return wide DataFrame.
 
     Parameters
@@ -52,19 +50,28 @@ def fetch_cams_window(
     Returns None on failure.
     """
     if dry_run:
-        log.info("[DRY-RUN] would fetch CAMS %s %s horizon=%dh", date_str, time_str, horizon_hours)
+        log.info(
+            "[DRY-RUN] would fetch CAMS %s %s horizon=%dh",
+            date_str,
+            time_str,
+            horizon_hours,
+        )
         return None
 
     client = get_cams_client()
     request = {
-        "variable":     _VARIABLES,
-        "date":         [f"{date_str}/{date_str}"],
-        "time":         [time_str],
+        "variable": _VARIABLES,
+        "date": [f"{date_str}/{date_str}"],
+        "time": [time_str],
         "leadtime_hour": _leadtime_range(horizon_hours),
-        "type":         ["forecast"],
-        "data_format":  "grib",
-        "area":         [lat + area_margin, lon - area_margin,
-                         lat - area_margin, lon + area_margin],
+        "type": ["forecast"],
+        "data_format": "grib",
+        "area": [
+            lat + area_margin,
+            lon - area_margin,
+            lat - area_margin,
+            lon + area_margin,
+        ],
     }
 
     tmp = tempfile.NamedTemporaryFile(suffix=".grib", delete=False)

@@ -7,35 +7,37 @@ CLI
 """
 
 from __future__ import annotations
+
 import argparse
 import logging
 import sys
 import time
 from datetime import date, timedelta
-from typing import Optional
 
 import pandas as pd
 
-from .fetcher import fetch_cams_window
 from .client import is_cams_configured
+from .fetcher import fetch_cams_window
 
 log = logging.getLogger(__name__)
 
 # CAMS delivers two forecast runs per day: 00Z and 12Z
-_RUNS = [("00:00", 0), ("12:00", 12)]   # (time_str, UTC hour offset)
-_CHUNK_DAYS = 1          # one day per CAMS request (safe for quota)
-_RETRY_SLEEP = [30, 60, 120]   # seconds before each retry attempt
+_RUNS = [("00:00", 0), ("12:00", 12)]  # (time_str, UTC hour offset)
+_CHUNK_DAYS = 1  # one day per CAMS request (safe for quota)
+_RETRY_SLEEP = [30, 60, 120]  # seconds before each retry attempt
 
 
 def _existing_dates(location_id: int) -> set[tuple[str, str]]:
     """Return set of (date_str, time_str) already in DB for this location."""
     try:
         from solar_forecast.db.manager import get_connection
+
         with get_connection() as conn:
             rows = conn.execute(
                 "SELECT DISTINCT date(run_time_utc), "
                 "time(run_time_utc) FROM cams_atmospheric_forecast "
-                "WHERE location_id = ?", (location_id,)
+                "WHERE location_id = ?",
+                (location_id,),
             ).fetchall()
         return {(r[0], r[1][:5]) for r in rows}
     except Exception as exc:
@@ -49,6 +51,7 @@ def _store(df: pd.DataFrame, location_id: int) -> int:
         return 0
     try:
         from solar_forecast.db.manager import upsert_cams
+
         return upsert_cams(df, location_id)
     except Exception as exc:
         log.error("DB insert failed: %s", exc)
@@ -59,14 +62,15 @@ def run_backfill(
     location_id: int,
     days: int = 365,
     dry_run: bool = False,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: float | None = None,
+    lon: float | None = None,
 ) -> dict:
     """Run historical CAMS backfill for a location.
 
     Returns a status dict: {total_days, fetched, skipped, errors}
     """
     import datetime as _dt
+
     _started_at = _dt.datetime.now(_dt.timezone.utc).isoformat()
 
     if not is_cams_configured() and not dry_run:
@@ -79,6 +83,7 @@ def run_backfill(
     if lat is None or lon is None:
         try:
             from solar_forecast.db.manager import get_location
+
             loc = get_location(location_id)
             if loc is None:
                 raise ValueError(f"Location {location_id} not found in DB")
@@ -100,20 +105,29 @@ def run_backfill(
             if key in existing:
                 log.debug("skip existing: %s %s", date_str, time_str)
                 stats["skipped"] += 1
-                current += timedelta(days=1) if time_str == _RUNS[-1][0] else timedelta(0)
+                current += (
+                    timedelta(days=1) if time_str == _RUNS[-1][0] else timedelta(0)
+                )
                 continue
 
-            log.info("backfill: %s %s (lat=%.3f lon=%.3f)", date_str, time_str, lat, lon)
+            log.info(
+                "backfill: %s %s (lat=%.3f lon=%.3f)", date_str, time_str, lat, lon
+            )
 
             df = None
             for attempt, sleep_s in enumerate([0] + _RETRY_SLEEP):
                 if sleep_s:
-                    log.info("retry %d/%d after %ds", attempt, len(_RETRY_SLEEP), sleep_s)
+                    log.info(
+                        "retry %d/%d after %ds", attempt, len(_RETRY_SLEEP), sleep_s
+                    )
                     time.sleep(sleep_s)
                 df = fetch_cams_window(
-                    lat=lat, lon=lon,
-                    date_str=date_str, time_str=time_str,
-                    horizon_hours=12, dry_run=dry_run,
+                    lat=lat,
+                    lon=lon,
+                    date_str=date_str,
+                    time_str=time_str,
+                    horizon_hours=12,
+                    dry_run=dry_run,
                 )
                 if df is not None or dry_run:
                     break
@@ -135,6 +149,7 @@ def run_backfill(
     if not dry_run:
         try:
             from solar_forecast.db.manager import log_ingestion_run
+
             log_ingestion_run(
                 source="cams_backfill",
                 location_id=location_id,
@@ -159,7 +174,9 @@ def _cli():
     )
     p = argparse.ArgumentParser(description="CAMS historical backfill")
     p.add_argument("--location-id", type=int, required=True, help="Location ID from DB")
-    p.add_argument("--days", type=int, default=365, help="Days to backfill (default 365)")
+    p.add_argument(
+        "--days", type=int, default=365, help="Days to backfill (default 365)"
+    )
     p.add_argument("--lat", type=float, default=None, help="Override latitude")
     p.add_argument("--lon", type=float, default=None, help="Override longitude")
     p.add_argument("--dry-run", action="store_true", help="Don't write to DB")

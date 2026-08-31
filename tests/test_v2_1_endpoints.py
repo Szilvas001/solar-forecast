@@ -15,25 +15,31 @@ client = TestClient(app)
 
 def _mock_forecast(*args, **kwargs):
     times = pd.date_range("2025-01-01", periods=24, freq="h", tz="UTC")
-    df = pd.DataFrame({
-        "ghi_wm2":       [0.0] * 6 + [400.0] * 12 + [0.0] * 6,
-        "poa_wm2":       [0.0] * 6 + [450.0] * 12 + [0.0] * 6,
-        "power_kw":      [0.0] * 6 + [3.0]   * 12 + [0.0] * 6,
-        "energy_kwh":    [0.0] * 6 + [3.0]   * 12 + [0.0] * 6,
-        "kt":            [None] * 24,
-        "t_cell_c":      [25.0] * 24,
-        "cloud_cover_frac": [0.2] * 24,
-        "energy_kwh_cs": [3.5] * 24,
-        "spectral_mm":   [1.02] * 24,
-        "iam":           [0.98] * 24,
-    }, index=times)
+    df = pd.DataFrame(
+        {
+            "ghi_wm2": [0.0] * 6 + [400.0] * 12 + [0.0] * 6,
+            "poa_wm2": [0.0] * 6 + [450.0] * 12 + [0.0] * 6,
+            "power_kw": [0.0] * 6 + [3.0] * 12 + [0.0] * 6,
+            "energy_kwh": [0.0] * 6 + [3.0] * 12 + [0.0] * 6,
+            "kt": [None] * 24,
+            "t_cell_c": [25.0] * 24,
+            "cloud_cover_frac": [0.2] * 24,
+            "energy_kwh_cs": [3.5] * 24,
+            "spectral_mm": [1.02] * 24,
+            "iam": [0.98] * 24,
+        },
+        index=times,
+    )
     return {
         "hourly": df,
         "summary": {
-            "today_kwh": 36.0, "tomorrow_kwh": 36.0,
+            "today_kwh": 36.0,
+            "tomorrow_kwh": 36.0,
             "total_7d_kwh": 252.0,
-            "peak_power_kw": 3.0, "peak_hour_utc": str(times[12]),
-            "capacity_factor_pct": 25.0, "cloud_loss_pct": 8.0,
+            "peak_power_kw": 3.0,
+            "peak_hour_utc": str(times[12]),
+            "capacity_factor_pct": 25.0,
+            "cloud_loss_pct": 8.0,
         },
         "clearsky_hourly": df,
         "location": {},
@@ -41,6 +47,7 @@ def _mock_forecast(*args, **kwargs):
 
 
 # ── /model/status ──────────────────────────────────────────────────────────
+
 
 def test_model_status_returns_ok():
     r = client.get("/model/status")
@@ -66,6 +73,7 @@ def test_model_versions_filter_by_type():
 
 # ── /locations pagination ──────────────────────────────────────────────────
 
+
 def test_locations_paginated_response_shape():
     r = client.get("/locations")
     assert r.status_code == 200
@@ -79,9 +87,15 @@ def test_locations_paginated_response_shape():
 def test_locations_pagination_params():
     # Create two locations
     for name in ("Alpha", "Beta"):
-        client.post("/locations", json={
-            "name": name, "lat": 47.5, "lon": 19.0, "capacity_kw": 5.0,
-        })
+        client.post(
+            "/locations",
+            json={
+                "name": name,
+                "lat": 47.5,
+                "lon": 19.0,
+                "capacity_kw": 5.0,
+            },
+        )
 
     r = client.get("/locations?page=1&per_page=1")
     assert r.status_code == 200
@@ -91,8 +105,14 @@ def test_locations_pagination_params():
 
 
 def test_locations_search_filter():
-    client.post("/locations", json={"name": "Szeged Solar", "lat": 46.2, "lon": 20.1, "capacity_kw": 3.0})
-    client.post("/locations", json={"name": "Budapest Grid", "lat": 47.5, "lon": 19.0, "capacity_kw": 5.0})
+    client.post(
+        "/locations",
+        json={"name": "Szeged Solar", "lat": 46.2, "lon": 20.1, "capacity_kw": 3.0},
+    )
+    client.post(
+        "/locations",
+        json={"name": "Budapest Grid", "lat": 47.5, "lon": 19.0, "capacity_kw": 5.0},
+    )
 
     r = client.get("/locations?search=Szeged")
     assert r.status_code == 200
@@ -102,12 +122,19 @@ def test_locations_search_filter():
 
 # ── /forecast with iam_model + denorm_factor ───────────────────────────────
 
+
 @patch("app.api.routes.forecast.run_demo_forecast", side_effect=_mock_forecast)
 def test_forecast_with_iam_and_denorm(mock_fn):
-    r = client.post("/forecast", json={
-        "lat": 47.5, "lon": 19.0, "capacity_kw": 5.0,
-        "iam_model": "martin_ruiz", "denorm_factor": 0.9,
-    })
+    r = client.post(
+        "/forecast",
+        json={
+            "lat": 47.5,
+            "lon": 19.0,
+            "capacity_kw": 5.0,
+            "iam_model": "martin_ruiz",
+            "denorm_factor": 0.9,
+        },
+    )
     assert r.status_code == 200
     body = r.json()
     assert "summary" in body
@@ -120,10 +147,15 @@ def test_forecast_with_iam_and_denorm(mock_fn):
 
 @patch("app.api.routes.forecast.run_demo_forecast", side_effect=_mock_forecast)
 def test_forecast_invalid_iam_model_rejected(mock_fn):
-    r = client.post("/forecast", json={
-        "lat": 47.5, "lon": 19.0, "capacity_kw": 5.0,
-        "iam_model": "BOGUS_MODEL",
-    })
+    r = client.post(
+        "/forecast",
+        json={
+            "lat": 47.5,
+            "lon": 19.0,
+            "capacity_kw": 5.0,
+            "iam_model": "BOGUS_MODEL",
+        },
+    )
     assert r.status_code == 422
 
 
@@ -142,6 +174,7 @@ def test_forecast_confidence_in_response(mock_fn):
 
 # ── energy_kwh formula validation ─────────────────────────────────────────
 
+
 @patch("app.api.routes.forecast.run_demo_forecast", side_effect=_mock_forecast)
 def test_energy_kwh_equals_power_times_one_hour(mock_fn):
     r = client.post("/forecast", json={"lat": 47.5, "lon": 19.0, "capacity_kw": 5.0})
@@ -155,10 +188,11 @@ def test_energy_kwh_equals_power_times_one_hour(mock_fn):
 
 # ── /health v2.1.0 ────────────────────────────────────────────────────────
 
+
 def test_health_version_and_engine():
     r = client.get("/health")
     assert r.status_code == 200
     body = r.json()
-    assert body["version"] == "2.1.0"
+    assert body["version"] == "2.2.0"
     assert "engine" in body
     assert "SPECTRL2" in body["engine"]

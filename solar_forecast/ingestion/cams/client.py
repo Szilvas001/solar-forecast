@@ -1,6 +1,7 @@
 """CAMS API client — lazy-imports cdsapi so package works without it."""
 
 from __future__ import annotations
+
 import logging
 import os
 from typing import Any

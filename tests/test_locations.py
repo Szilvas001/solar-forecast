@@ -6,14 +6,18 @@ from app.db import sqlite_manager as db
 
 
 def test_create_and_list_location():
-    new = db.create_location({
-        "name": "Test Site",
-        "lat": 47.5, "lon": 19.0,
-        "capacity_kw": 10.0,
-        "tilt": 30.0, "azimuth": 180.0,
-        "technology": "mono_si",
-        "timezone": "Europe/Budapest",
-    })
+    new = db.create_location(
+        {
+            "name": "Test Site",
+            "lat": 47.5,
+            "lon": 19.0,
+            "capacity_kw": 10.0,
+            "tilt": 30.0,
+            "azimuth": 180.0,
+            "technology": "mono_si",
+            "timezone": "Europe/Budapest",
+        }
+    )
     assert new["id"] > 0
     assert new["name"] == "Test Site"
 

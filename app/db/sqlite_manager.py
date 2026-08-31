@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any
 
 DB_PATH = Path(__file__).resolve().parents[2] / "data" / "solar_forecast.db"
 
@@ -76,13 +77,14 @@ def create_tables() -> None:
 
 # ── Location CRUD ──────────────────────────────────────────────────────────
 
+
 def list_locations() -> list[dict[str, Any]]:
     with _conn() as con:
         rows = con.execute("SELECT * FROM locations ORDER BY name").fetchall()
         return [dict(r) for r in rows]
 
 
-def get_location(location_id: int) -> Optional[dict[str, Any]]:
+def get_location(location_id: int) -> dict[str, Any] | None:
     with _conn() as con:
         row = con.execute(
             "SELECT * FROM locations WHERE id = ?", (location_id,)
@@ -96,8 +98,17 @@ def create_location(data: dict[str, Any]) -> dict[str, Any]:
     if missing:
         raise ValueError(f"Missing required fields: {missing}")
 
-    cols = ["name", "lat", "lon", "altitude", "capacity_kw",
-            "tilt", "azimuth", "technology", "timezone"]
+    cols = [
+        "name",
+        "lat",
+        "lon",
+        "altitude",
+        "capacity_kw",
+        "tilt",
+        "azimuth",
+        "technology",
+        "timezone",
+    ]
     vals = [
         str(data["name"]),
         float(data["lat"]),
@@ -115,15 +126,22 @@ def create_location(data: dict[str, Any]) -> dict[str, Any]:
             vals,
         )
         new_id = cur.lastrowid
-        row = con.execute(
-            "SELECT * FROM locations WHERE id = ?", (new_id,)
-        ).fetchone()
+        row = con.execute("SELECT * FROM locations WHERE id = ?", (new_id,)).fetchone()
         return dict(row) if row else None
 
 
-def update_location(location_id: int, data: dict[str, Any]) -> Optional[dict[str, Any]]:
-    allowed = {"name", "lat", "lon", "altitude", "capacity_kw",
-               "tilt", "azimuth", "technology", "timezone"}
+def update_location(location_id: int, data: dict[str, Any]) -> dict[str, Any] | None:
+    allowed = {
+        "name",
+        "lat",
+        "lon",
+        "altitude",
+        "capacity_kw",
+        "tilt",
+        "azimuth",
+        "technology",
+        "timezone",
+    }
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return get_location(location_id)
@@ -132,9 +150,7 @@ def update_location(location_id: int, data: dict[str, Any]) -> Optional[dict[str
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     vals = list(updates.values()) + [location_id]
     with _conn() as con:
-        con.execute(
-            f"UPDATE locations SET {set_clause} WHERE id = ?", vals
-        )
+        con.execute(f"UPDATE locations SET {set_clause} WHERE id = ?", vals)
     return get_location(location_id)
 
 
@@ -146,10 +162,13 @@ def delete_location(location_id: int) -> bool:
 
 # ── Forecast cache ─────────────────────────────────────────────────────────
 
-def save_forecast(location_id: int, forecast_date: str,
-                  payload: list[dict], summary: dict) -> None:
+
+def save_forecast(
+    location_id: int, forecast_date: str, payload: list[dict], summary: dict
+) -> None:
     with _conn() as con:
-        con.execute("""
+        con.execute(
+            """
         INSERT INTO forecasts (location_id, forecast_date, payload_json, summary_json)
              VALUES (?, ?, ?, ?)
              ON CONFLICT(location_id, forecast_date)
@@ -157,16 +176,21 @@ def save_forecast(location_id: int, forecast_date: str,
                  payload_json = excluded.payload_json,
                  summary_json = excluded.summary_json,
                  generated_at = datetime('now')
-        """, (location_id, forecast_date, json.dumps(payload), json.dumps(summary)))
+        """,
+            (location_id, forecast_date, json.dumps(payload), json.dumps(summary)),
+        )
 
 
-def load_forecast(location_id: int, forecast_date: str) -> Optional[dict]:
+def load_forecast(location_id: int, forecast_date: str) -> dict | None:
     with _conn() as con:
-        row = con.execute("""
+        row = con.execute(
+            """
             SELECT payload_json, summary_json, generated_at
               FROM forecasts
              WHERE location_id = ? AND forecast_date = ?
-        """, (location_id, forecast_date)).fetchone()
+        """,
+            (location_id, forecast_date),
+        ).fetchone()
         if not row:
             return None
         return {

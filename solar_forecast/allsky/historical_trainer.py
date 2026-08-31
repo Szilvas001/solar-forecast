@@ -31,7 +31,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import joblib
 import numpy as np
@@ -54,11 +53,13 @@ CORE_FEATURES = [
 
 # ── Errors ────────────────────────────────────────────────────────────────
 
+
 class AccuracyTargetNotMet(RuntimeError):
     """Raised when validation R² / RMSE fails the contract."""
 
 
 # ── Result containers ────────────────────────────────────────────────────
+
 
 @dataclass
 class TrainingResult:
@@ -77,6 +78,7 @@ class TrainingResult:
 
 # ── Feature engineering ──────────────────────────────────────────────────
 
+
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     """Derive cyclic time encodings + ensure required columns exist.
 
@@ -91,15 +93,17 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         out.index = pd.to_datetime(out.index, utc=True)
 
     hour = out.index.hour + out.index.minute / 60.0
-    doy  = out.index.dayofyear
+    doy = out.index.dayofyear
     out["hour_sin"] = np.sin(2 * np.pi * hour / 24.0)
     out["hour_cos"] = np.cos(2 * np.pi * hour / 24.0)
-    out["doy_sin"]  = np.sin(2 * np.pi * doy / 365.25)
-    out["doy_cos"]  = np.cos(2 * np.pi * doy / 365.25)
+    out["doy_sin"] = np.sin(2 * np.pi * doy / 365.25)
+    out["doy_cos"] = np.cos(2 * np.pi * doy / 365.25)
 
     if "cos_zenith" not in out.columns:
         # Approx daylight envelope as fallback when solar geometry is missing.
-        out["cos_zenith"] = np.clip(out["ghi_clear"] / out["ghi_clear"].max(), 0, 1).fillna(0)
+        out["cos_zenith"] = np.clip(
+            out["ghi_clear"] / out["ghi_clear"].max(), 0, 1
+        ).fillna(0)
     if "cloud_cover_low" not in out.columns:
         out["cloud_cover_low"] = out["cloud_cover"]
 
@@ -107,6 +111,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ── Trainer ──────────────────────────────────────────────────────────────
+
 
 class HistoricalGHITrainer:
     """Gradient-boosted regressor mapping (GHI_clear, cloud, …) → GHI_obs.
@@ -117,7 +122,7 @@ class HistoricalGHITrainer:
 
     def __init__(
         self,
-        features: Optional[list[str]] = None,
+        features: list[str] | None = None,
         target: str = "ghi_obs",
         n_estimators: int = 400,
         max_depth: int = 5,
@@ -126,12 +131,12 @@ class HistoricalGHITrainer:
     ):
         self.features = list(features) if features else list(CORE_FEATURES)
         self.target = target
-        self.params = dict(
-            n_estimators=n_estimators,
-            max_depth=max_depth,
-            learning_rate=learning_rate,
-            random_state=random_state,
-        )
+        self.params = {
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "learning_rate": learning_rate,
+            "random_state": random_state,
+        }
         self.model: object | None = None
         self._impl: str = "uninitialized"
 
@@ -140,6 +145,7 @@ class HistoricalGHITrainer:
     def _new_model(self):
         try:
             from xgboost import XGBRegressor
+
             self._impl = "xgboost"
             return XGBRegressor(
                 objective="reg:squarederror",
@@ -154,6 +160,7 @@ class HistoricalGHITrainer:
             )
         except Exception:
             from sklearn.ensemble import HistGradientBoostingRegressor
+
             self._impl = "sklearn"
             return HistGradientBoostingRegressor(
                 max_iter=self.params["n_estimators"],
@@ -162,7 +169,7 @@ class HistoricalGHITrainer:
                 random_state=self.params["random_state"],
             )
 
-    def fit(self, df: pd.DataFrame) -> "HistoricalGHITrainer":
+    def fit(self, df: pd.DataFrame) -> HistoricalGHITrainer:
         df = build_features(df)
         if self.target not in df.columns:
             raise ValueError(f"target column '{self.target}' missing")
@@ -210,7 +217,7 @@ class HistoricalGHITrainer:
         val_idx, train_idx = idx[:n_val], idx[n_val:]
 
         train_df = df.iloc[train_idx]
-        val_df   = df.iloc[val_idx]
+        val_df = df.iloc[val_idx]
 
         self.fit(train_df)
         y_pred = self.predict(val_df)
@@ -227,23 +234,30 @@ class HistoricalGHITrainer:
         importance: dict[str, float] = {}
         feats = getattr(self, "_fitted_features", self.features)
         try:
-            if self._impl == "xgboost":
-                importance = dict(zip(feats, self.model.feature_importances_.tolist()))
-            elif hasattr(self.model, "feature_importances_"):
-                importance = dict(zip(feats, self.model.feature_importances_.tolist()))
+            if self._impl == "xgboost" or hasattr(self.model, "feature_importances_"):
+                importance = dict(
+                    zip(feats, self.model.feature_importances_.tolist(), strict=False)
+                )
         except Exception:
             pass
 
         result = TrainingResult(
-            r2=r2, rmse=rmse, rmse_relative=rmse_rel, mae=mae,
-            n_train=len(train_df), n_val=len(val_df),
+            r2=r2,
+            rmse=rmse,
+            rmse_relative=rmse_rel,
+            mae=mae,
+            n_train=len(train_df),
+            n_val=len(val_df),
             feature_importance=importance,
             feature_columns=feats,
         )
 
         log.info(
             "historical-trainer (%s) — R²=%.3f RMSE=%.1f W/m² (%.1f%% of peak)",
-            self._impl, r2, rmse, 100 * rmse_rel,
+            self._impl,
+            r2,
+            rmse,
+            100 * rmse_rel,
         )
 
         if enforce and not result.meets_contract(r2_min, rmse_rel_max):
@@ -260,17 +274,21 @@ class HistoricalGHITrainer:
             raise RuntimeError("nothing to save — call fit() first")
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         feats = getattr(self, "_fitted_features", self.features)
-        joblib.dump({
-            "model": self.model,
-            "impl": self._impl,
-            "features": feats,
-        }, path)
+        joblib.dump(
+            {
+                "model": self.model,
+                "impl": self._impl,
+                "features": feats,
+            },
+            path,
+        )
         try:
             from solar_forecast.db.manager import register_model_version
+
             r = getattr(self, "_last_result", None)
             register_model_version(
                 model_type="ghi_historical",
-                version="2.1.0",
+                version="2.2.0",
                 path=str(path),
                 r2=r.r2 if r else None,
                 rmse=r.rmse if r else None,
@@ -281,7 +299,7 @@ class HistoricalGHITrainer:
             log.warning("model version registration failed: %s", exc)
 
     @classmethod
-    def load(cls, path: str | Path) -> "HistoricalGHITrainer":
+    def load(cls, path: str | Path) -> HistoricalGHITrainer:
         bundle = joblib.load(path)
         obj = cls(features=bundle["features"])
         obj.model = bundle["model"]
@@ -291,6 +309,7 @@ class HistoricalGHITrainer:
 
 
 # ── Synthetic data generation (used by tests + offline training) ─────────
+
 
 def synthesize_training_data(
     n_days: int = 60,
@@ -310,16 +329,15 @@ def synthesize_training_data(
     rng = np.random.default_rng(seed)
     times = pd.date_range("2024-01-01", periods=n_days * 24, freq="h", tz="UTC")
     hour = times.hour + times.minute / 60.0
-    doy  = times.dayofyear
+    doy = times.dayofyear
 
     decl = 23.45 * np.sin(np.deg2rad(360 / 365 * (doy - 81)))
-    hra  = 15.0 * (hour - 12.0)
-    sin_alt = (
-        np.sin(np.deg2rad(lat)) * np.sin(np.deg2rad(decl))
-        + np.cos(np.deg2rad(lat)) * np.cos(np.deg2rad(decl)) * np.cos(np.deg2rad(hra))
-    )
+    hra = 15.0 * (hour - 12.0)
+    sin_alt = np.sin(np.deg2rad(lat)) * np.sin(np.deg2rad(decl)) + np.cos(
+        np.deg2rad(lat)
+    ) * np.cos(np.deg2rad(decl)) * np.cos(np.deg2rad(hra))
     cos_zenith = np.clip(sin_alt, 0, 1)
-    ghi_clear = 1100.0 * cos_zenith ** 1.15  # rough clear-sky envelope
+    ghi_clear = 1100.0 * cos_zenith**1.15  # rough clear-sky envelope
 
     cloud = rng.beta(1.5, 3.0, size=len(times))
     cloud_low = np.clip(cloud + rng.normal(0, 0.05, len(times)), 0, 1)
@@ -327,20 +345,23 @@ def synthesize_training_data(
     kt = np.clip(kt, 0.05, 1.05)
     ghi_obs = ghi_clear * kt
 
-    return pd.DataFrame({
-        "ghi_clear":       ghi_clear,
-        "cloud_cover":     cloud,
-        "cloud_cover_low": cloud_low,
-        "cos_zenith":      cos_zenith,
-        "ghi_obs":         np.clip(ghi_obs, 0, None),
-    }, index=times)
+    return pd.DataFrame(
+        {
+            "ghi_clear": ghi_clear,
+            "cloud_cover": cloud,
+            "cloud_cover_low": cloud_low,
+            "cos_zenith": cos_zenith,
+            "ghi_obs": np.clip(ghi_obs, 0, None),
+        },
+        index=times,
+    )
 
 
 __all__ = [
     "CORE_FEATURES",
+    "AccuracyTargetNotMet",
     "HistoricalGHITrainer",
     "TrainingResult",
-    "AccuracyTargetNotMet",
     "build_features",
     "synthesize_training_data",
 ]

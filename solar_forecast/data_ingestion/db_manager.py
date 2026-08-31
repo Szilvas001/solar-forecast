@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -102,16 +101,37 @@ CREATE INDEX IF NOT EXISTS idx_fcst_ts ON forecasts (timestamp);
 
 # Column list for cams_atmo upsert
 _ATMO_COLS = [
-    "timestamp", "lat", "lon",
-    "aod_550nm", "aod_469nm", "aod_670nm", "aod_865nm", "aod_1240nm",
-    "aod_dust_550nm", "aod_bc_550nm", "aod_om_550nm", "aod_ss_550nm", "aod_su_550nm",
-    "angstrom_alpha1", "angstrom_alpha2", "angstrom_exponent",
-    "ssa_550nm", "asymmetry_factor",
-    "total_ozone", "precipitable_water", "surface_pressure",
-    "cloud_cover", "cloud_optical_depth",
-    "temperature_2m", "boundary_layer_height",
-    "forecast_albedo", "snow_albedo",
-    "pm25", "pm10", "total_column_co", "total_column_no2",
+    "timestamp",
+    "lat",
+    "lon",
+    "aod_550nm",
+    "aod_469nm",
+    "aod_670nm",
+    "aod_865nm",
+    "aod_1240nm",
+    "aod_dust_550nm",
+    "aod_bc_550nm",
+    "aod_om_550nm",
+    "aod_ss_550nm",
+    "aod_su_550nm",
+    "angstrom_alpha1",
+    "angstrom_alpha2",
+    "angstrom_exponent",
+    "ssa_550nm",
+    "asymmetry_factor",
+    "total_ozone",
+    "precipitable_water",
+    "surface_pressure",
+    "cloud_cover",
+    "cloud_optical_depth",
+    "temperature_2m",
+    "boundary_layer_height",
+    "forecast_albedo",
+    "snow_albedo",
+    "pm25",
+    "pm10",
+    "total_column_co",
+    "total_column_no2",
 ]
 
 
@@ -119,7 +139,7 @@ class DBManager:
     """Thin SQLAlchemy wrapper for the solar forecast schema."""
 
     def __init__(self, cfg: dict):
-        db  = cfg["database"]
+        db = cfg["database"]
         url = (
             f"postgresql+psycopg2://{db['user']}:{db['password']}"
             f"@{db['host']}:{db['port']}/{db['name']}"
@@ -149,16 +169,18 @@ class DBManager:
         with self.engine.begin() as conn:
             for _, row in rows.iterrows():
                 params = {col: _safe(row.get(col)) for col in _ATMO_COLS}
-                params.setdefault("angstrom_exponent",
-                                  params.get("angstrom_alpha2"))
+                params.setdefault("angstrom_exponent", params.get("angstrom_alpha2"))
 
-                cols_sql   = ", ".join(_ATMO_COLS)
+                cols_sql = ", ".join(_ATMO_COLS)
                 values_sql = ", ".join(f":{c}" for c in _ATMO_COLS)
-                r = conn.execute(text(f"""
+                r = conn.execute(
+                    text(f"""
                     INSERT INTO cams_atmo ({cols_sql})
                     VALUES ({values_sql})
                     ON CONFLICT (timestamp, lat, lon) DO NOTHING
-                """), params)
+                """),
+                    params,
+                )
                 inserted += r.rowcount
         return inserted
 
@@ -172,8 +194,9 @@ class DBManager:
             ORDER BY timestamp
         """)
         with self.engine.connect() as conn:
-            df = pd.read_sql(q, conn, params={"lat": lat, "lon": lon,
-                                               "start": start, "end": end})
+            df = pd.read_sql(
+                q, conn, params={"lat": lat, "lon": lon, "start": start, "end": end}
+            )
         if not df.empty:
             df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
             df = df.set_index("timestamp").drop(columns=["id"], errors="ignore")
@@ -193,7 +216,8 @@ class DBManager:
         inserted = 0
         with self.engine.begin() as conn:
             for _, row in rows.iterrows():
-                r = conn.execute(text("""
+                r = conn.execute(
+                    text("""
                     INSERT INTO cams_radiation
                         (timestamp, lat, lon, ghi, dhi, dni,
                          ghi_clear, dhi_clear, dni_clear)
@@ -201,16 +225,19 @@ class DBManager:
                         (:timestamp, :lat, :lon, :ghi, :dhi, :dni,
                          :ghi_clear, :dhi_clear, :dni_clear)
                     ON CONFLICT (timestamp, lat, lon) DO NOTHING
-                """), {
-                    "timestamp": row.get("timestamp"),
-                    "lat": row.get("lat"), "lon": row.get("lon"),
-                    "ghi": _safe(row.get("ghi")),
-                    "dhi": _safe(row.get("dhi")),
-                    "dni": _safe(row.get("dni")),
-                    "ghi_clear": _safe(row.get("ghi_clear")),
-                    "dhi_clear": _safe(row.get("dhi_clear")),
-                    "dni_clear": _safe(row.get("dni_clear")),
-                })
+                """),
+                    {
+                        "timestamp": row.get("timestamp"),
+                        "lat": row.get("lat"),
+                        "lon": row.get("lon"),
+                        "ghi": _safe(row.get("ghi")),
+                        "dhi": _safe(row.get("dhi")),
+                        "dni": _safe(row.get("dni")),
+                        "ghi_clear": _safe(row.get("ghi_clear")),
+                        "dhi_clear": _safe(row.get("dhi_clear")),
+                        "dni_clear": _safe(row.get("dni_clear")),
+                    },
+                )
                 inserted += r.rowcount
         return inserted
 
@@ -225,8 +252,9 @@ class DBManager:
             ORDER BY timestamp
         """)
         with self.engine.connect() as conn:
-            df = pd.read_sql(q, conn, params={"lat": lat, "lon": lon,
-                                               "start": start, "end": end})
+            df = pd.read_sql(
+                q, conn, params={"lat": lat, "lon": lon, "start": start, "end": end}
+            )
         if not df.empty:
             df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
             df = df.set_index("timestamp")
@@ -252,7 +280,8 @@ class DBManager:
         rows = df.reset_index().rename(columns={"index": "timestamp"})
         with self.engine.begin() as conn:
             for _, row in rows.iterrows():
-                conn.execute(text("""
+                conn.execute(
+                    text("""
                     INSERT INTO forecasts
                         (timestamp, lat, lon, capacity_kw, power_kw,
                          power_dc_kw, ghi, kt, t_cell, g_eff, mm)
@@ -268,19 +297,21 @@ class DBManager:
                             g_eff       = EXCLUDED.g_eff,
                             mm          = EXCLUDED.mm,
                             created_at  = now()
-                """), {
-                    "timestamp":   row.get("timestamp"),
-                    "lat":         lat,
-                    "lon":         lon,
-                    "capacity_kw": capacity_kw,
-                    "power_kw":    _safe(row.get("power_kw")),
-                    "power_dc_kw": _safe(row.get("power_dc_kw")),
-                    "ghi":         _safe(row.get("ghi")),
-                    "kt":          _safe(row.get("kt")),
-                    "t_cell":      _safe(row.get("t_cell")),
-                    "g_eff":       _safe(row.get("g_eff")),
-                    "mm":          _safe(row.get("mm")),
-                })
+                """),
+                    {
+                        "timestamp": row.get("timestamp"),
+                        "lat": lat,
+                        "lon": lon,
+                        "capacity_kw": capacity_kw,
+                        "power_kw": _safe(row.get("power_kw")),
+                        "power_dc_kw": _safe(row.get("power_dc_kw")),
+                        "ghi": _safe(row.get("ghi")),
+                        "kt": _safe(row.get("kt")),
+                        "t_cell": _safe(row.get("t_cell")),
+                        "g_eff": _safe(row.get("g_eff")),
+                        "mm": _safe(row.get("mm")),
+                    },
+                )
 
 
 def _safe(v):
@@ -289,6 +320,7 @@ def _safe(v):
         return None
     try:
         import math
+
         f = float(v)
         return None if math.isnan(f) or math.isinf(f) else f
     except (TypeError, ValueError):

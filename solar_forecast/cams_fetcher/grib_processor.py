@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 # ── Unit corrections ──────────────────────────────────────────────────────
 
 UNIT_ADJUSTMENTS = {
-    "divide_by_10":  lambda x: x / 10.0,
+    "divide_by_10": lambda x: x / 10.0,
     "divide_by_100": lambda x: x / 100.0,
 }
 
@@ -36,6 +36,7 @@ def apply_unit_adjustments(df: pd.DataFrame, adjustments: dict) -> pd.DataFrame:
 
 
 # ── Bilinear interpolation ────────────────────────────────────────────────
+
 
 def bilinear_interpolate(
     lats_2d: np.ndarray,
@@ -86,6 +87,7 @@ def bilinear_interpolate(
 
 # ── GRIB I/O ──────────────────────────────────────────────────────────────
 
+
 def parse_grib_file(
     path: str,
     target_lat: float,
@@ -108,22 +110,30 @@ def parse_grib_file(
         for grb in grbs:
             try:
                 lats, lons = grb.latlons()
-                value = bilinear_interpolate(lats, lons, grb.values, target_lat, target_lon)
+                value = bilinear_interpolate(
+                    lats, lons, grb.values, target_lat, target_lon
+                )
 
                 ref_time = pd.Timestamp(
-                    year=grb.year, month=grb.month, day=grb.day,
-                    hour=grb.hour, minute=grb.minute, tz="UTC",
+                    year=grb.year,
+                    month=grb.month,
+                    day=grb.day,
+                    hour=grb.hour,
+                    minute=grb.minute,
+                    tz="UTC",
                 )
                 forecast_hours = int(getattr(grb, "stepRange", grb.endStep or 0))
                 model_level = int(getattr(grb, "level", 0))
 
-                rows.append({
-                    "reference_time": ref_time,
-                    "forecast_hours": forecast_hours,
-                    "variable": grb.shortName,
-                    "model_level": model_level,
-                    "value": value,
-                })
+                rows.append(
+                    {
+                        "reference_time": ref_time,
+                        "forecast_hours": forecast_hours,
+                        "variable": grb.shortName,
+                        "model_level": model_level,
+                        "value": value,
+                    }
+                )
             except Exception as exc:
                 log.warning("GRIB message skipped (%s): %s", grb.shortName, exc)
 
@@ -134,6 +144,7 @@ def parse_grib_file(
 
 
 # ── Pivot + clean ─────────────────────────────────────────────────────────
+
 
 def pivot_and_clean(
     df_long: pd.DataFrame,
